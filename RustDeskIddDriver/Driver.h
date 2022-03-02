@@ -100,10 +100,13 @@ namespace Microsoft
             void InitAdapter();
             void FinishInit(UINT ConnectorIndex);
 
-            void PlugInMonitor();
-            void PlugOutMonitor();
+            NTSTATUS PlugInMonitor(UINT ConnectorIndex, GUID ContainerID);
+            NTSTATUS PlugOutMonitor(UINT ConnectorIndex);
 
         protected:
+            static constexpr UINT m_sMaxMonitorCount = 4;
+            IDDCX_MONITOR m_Monitors[m_sMaxMonitorCount];
+
             WDFDEVICE m_WdfDevice;
             IDDCX_ADAPTER m_Adapter;
         };

@@ -24,6 +24,9 @@ using namespace std;
 using namespace Microsoft::IndirectDisp;
 using namespace Microsoft::WRL;
 
+#define STATUS_ERROR_MONITOR_EXISTS (3 << 30) + 1
+#define STATUS_ERROR_MONITOR_NOT_EXISTS (3 << 30) + 2
+
 #pragma region SampleMonitors
 
 static constexpr DWORD IDD_SAMPLE_MONITOR_COUNT = 3; // If monitor count > ARRAYSIZE(s_SampleMonitors), we create edid-less monitors
@@ -554,10 +557,23 @@ IndirectDeviceContext::IndirectDeviceContext(_In_ WDFDEVICE WdfDevice) :
     m_WdfDevice(WdfDevice)
 {
     m_Adapter = {};
+
+    for (UINT i = 0; i < m_sMaxMonitorCount; i++)
+    {
+        m_Monitors[i] = NULL;
+    }
 }
 
 IndirectDeviceContext::~IndirectDeviceContext()
 {
+    for (UINT i = 0; i < m_sMaxMonitorCount; i++)
+    {
+        if (m_Monitors[i] != NULL)
+        {
+            // TODO: Plug out monitor
+            m_Monitors[i] = NULL;
+        }
+    }
 }
 
 void IndirectDeviceContext::InitAdapter()
@@ -627,14 +643,6 @@ void IndirectDeviceContext::InitAdapter()
 
 void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
 {
-    // ==============================
-    // TODO: In a real driver, the EDID should be retrieved dynamically from a connected physical monitor. The EDIDs
-    // provided here are purely for demonstration.
-    // Monitor manufacturers are required to correctly fill in physical monitor attributes in order to allow the OS
-    // to optimize settings like viewing distance and scale factor. Manufacturers should also use a unique serial
-    // number every single device to ensure the OS can tell the monitors apart.
-    // ==============================
-
     WDF_OBJECT_ATTRIBUTES Attr;
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&Attr, IndirectMonitorContextWrapper);
 
@@ -646,7 +654,7 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
 
     MonitorInfo.MonitorDescription.Size = sizeof(MonitorInfo.MonitorDescription);
     MonitorInfo.MonitorDescription.Type = IDDCX_MONITOR_DESCRIPTION_TYPE_EDID;
-    if (ConnectorIndex >= ARRAYSIZE(s_SampleMonitors))
+    if (ConnectorIndex >= m_sMaxMonitorCount)
     {
         MonitorInfo.MonitorDescription.DataSize = 0;
         MonitorInfo.MonitorDescription.pData = nullptr;
@@ -654,7 +662,7 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
     else
     {
         MonitorInfo.MonitorDescription.DataSize = IndirectSampleMonitor::szEdidBlock;
-        MonitorInfo.MonitorDescription.pData = const_cast<BYTE*>(s_SampleMonitors[ConnectorIndex].pEdidBlock);
+        MonitorInfo.MonitorDescription.pData = const_cast<BYTE*>(s_SampleMonitors[0].pEdidBlock);
     }
 
     // ==============================
@@ -711,14 +719,108 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
     }
 }
 
-void IndirectDeviceContext::PlugInMonitor()
+NTSTATUS IndirectDeviceContext::PlugInMonitor(UINT ConnectorIndex, GUID ContainerID)
 {
+    if (m_Monitors[ConnectorIndex] != NULL)
+    {
+        return STATUS_ERROR_MONITOR_EXISTS;
+    }
 
+    WDF_OBJECT_ATTRIBUTES Attr;
+    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&Attr, IndirectMonitorContextWrapper);
+
+    // In the sample driver, we report a monitor right away but a real driver would do this when a monitor connection event occurs
+    IDDCX_MONITOR_INFO MonitorInfo = {};
+    MonitorInfo.Size = sizeof(MonitorInfo);
+    MonitorInfo.MonitorType = DISPLAYCONFIG_OUTPUT_TECHNOLOGY_HDMI;
+    MonitorInfo.ConnectorIndex = ConnectorIndex;
+
+    MonitorInfo.MonitorDescription.Size = sizeof(MonitorInfo.MonitorDescription);
+    MonitorInfo.MonitorDescription.Type = IDDCX_MONITOR_DESCRIPTION_TYPE_EDID;
+    if (ConnectorIndex >= ARRAYSIZE(s_SampleMonitors))
+    {
+        MonitorInfo.MonitorDescription.DataSize = 0;
+        MonitorInfo.MonitorDescription.pData = nullptr;
+    }
+    else
+    {
+        MonitorInfo.MonitorDescription.DataSize = IndirectSampleMonitor::szEdidBlock;
+        MonitorInfo.MonitorDescription.pData = const_cast<BYTE*>(s_SampleMonitors[ConnectorIndex].pEdidBlock);
+    }
+
+    // Create a container ID
+    // CoCreateGuid(&MonitorInfo.MonitorContainerId);
+    MonitorInfo.MonitorContainerId = ContainerID;
+
+    IDARG_IN_MONITORCREATE MonitorCreate = {};
+    MonitorCreate.ObjectAttributes = &Attr;
+    MonitorCreate.pMonitorInfo = &MonitorInfo;
+
+    // Create a monitor object with the specified monitor descriptor
+    IDARG_OUT_MONITORCREATE MonitorCreateOut;
+    NTSTATUS Status = IddCxMonitorCreate(m_Adapter, &MonitorCreate, &MonitorCreateOut);
+    if (NT_SUCCESS(Status))
+    {
+        TraceEvents(TRACE_LEVEL_INFORMATION,
+            TRACE_DEVICE,
+            "%!FUNC! create monitor done");
+
+        // Create a new monitor context object and attach it to the Idd monitor object
+        auto* pMonitorContextWrapper = WdfObjectGet_IndirectMonitorContextWrapper(MonitorCreateOut.MonitorObject);
+        pMonitorContextWrapper->pContext = new IndirectMonitorContext(MonitorCreateOut.MonitorObject);
+
+        // Tell the OS that the monitor has been plugged in
+        IDARG_OUT_MONITORARRIVAL ArrivalOut;
+        Status = IddCxMonitorArrival(MonitorCreateOut.MonitorObject, &ArrivalOut);
+        if (NT_SUCCESS(Status))
+        {
+            m_Monitors[ConnectorIndex] = MonitorCreateOut.MonitorObject;
+
+            TraceEvents(TRACE_LEVEL_INFORMATION,
+                TRACE_DEVICE,
+                "%!FUNC! tell the OS that the monitor has been plugged in done");
+        }
+        else
+        {
+            TraceEvents(TRACE_LEVEL_ERROR,
+                TRACE_DEVICE,
+                "%!FUNC! Cannot tell the OS that the monitor has been plugged in %!STATUS!",
+                Status);
+        }
+    }
+    else
+    {
+        TraceEvents(TRACE_LEVEL_ERROR,
+            TRACE_DEVICE,
+            "%!FUNC! Cannot create monitor %!STATUS!",
+            Status);
+    }
+    return Status;
 }
 
-void IndirectDeviceContext::PlugOutMonitor()
+NTSTATUS IndirectDeviceContext::PlugOutMonitor(UINT ConnectorIndex)
 {
-
+    if (m_Monitors[ConnectorIndex] == NULL)
+    {
+        return STATUS_ERROR_MONITOR_NOT_EXISTS;
+    }
+    NTSTATUS Status = IddCxMonitorDeparture(m_Monitors[ConnectorIndex]);
+    if (NT_SUCCESS(Status))
+    {
+        TraceEvents(TRACE_LEVEL_INFORMATION,
+            TRACE_DEVICE,
+            "%!FUNC! plug in monitor %ud done",
+            ConnectorIndex);
+    }
+    else
+    {
+        TraceEvents(TRACE_LEVEL_ERROR,
+            TRACE_DEVICE,
+            "%!FUNC! cannot plug out monitor %ud %!STATUS!",
+            ConnectorIndex,
+            Status);
+    }
+    return Status;
 }
 
 IndirectMonitorContext::IndirectMonitorContext(_In_ IDDCX_MONITOR Monitor) :
@@ -771,6 +873,7 @@ _Use_decl_annotations_
 VOID
 IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBufferLength, size_t InputBufferLength, ULONG IoControlCode)
 {
+    // https://cpp.hotexamples.com/examples/-/-/WdfRequestSend/cpp-wdfrequestsend-function-examples.html
     UNREFERENCED_PARAMETER(Request);
     UNREFERENCED_PARAMETER(OutputBufferLength);
     UNREFERENCED_PARAMETER(InputBufferLength);
@@ -781,6 +884,65 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
     UNREFERENCED_PARAMETER(pContext);
     // pContext->pContext->InitAdapter();
 }
+
+// https://github.com/zhaohengyi/Win_Dev_Driver_Code/blob/master/04/WDF_CY001/ReadWrite.c
+//void MouseTrapEvtIoInternalDeviceControl(WDFQUEUE queue, WDFREQUEST request, size_t outputBufferLength, size_t inputBufferLength, ULONG ioControlCode) {
+//    UNREFERENCED_PARAMETER(outputBufferLength);
+//    UNREFERENCED_PARAMETER(inputBufferLength);
+//
+//    NTSTATUS status = STATUS_SUCCESS;
+//
+//    PAGED_CODE(); // Ensure paging is allowed in current IRQL
+//
+//    // Get extension data
+//    WDFDEVICE hDevice = WdfIoQueueGetDevice(queue);
+//    PDEVICE_CONTEXT context = DeviceGetContext(hDevice);
+//
+//    if (ioControlCode == IOCTL_INTERNAL_MOUSE_CONNECT) {
+//        // Only allow one connection.
+//        if (context->UpperConnectData.ClassService == NULL) {
+//            // Copy the connection parameters to the device extension.
+//            PCONNECT_DATA connectData;
+//            size_t length;
+//            status = WdfRequestRetrieveInputBuffer(request, sizeof(CONNECT_DATA), &connectData, &length);
+//            if (NT_SUCCESS(status)) {
+//                // Hook into the report chain (I am not sure this is correct)
+//                context->UpperConnectData = *connectData;
+//                connectData->ClassDeviceObject = WdfDeviceWdmGetDeviceObject(hDevice);
+//
+//#pragma warning(push)
+//#pragma warning(disable:4152)
+//                connectData->ClassService = MouseTrapServiceCallback;
+//#pragma warning(pop)
+//            }
+//            else {
+//                DebugPrint(("[MouseTrap] WdfRequestRetrieveInputBuffer failed %x\n", status));
+//            }
+//        }
+//        else {
+//            status = STATUS_SHARING_VIOLATION;
+//        }
+//    }
+//    else if (ioControlCode == IOCTL_INTERNAL_MOUSE_DISCONNECT) {
+//        status = STATUS_NOT_IMPLEMENTED;
+//    }
+//
+//    // Complete on error
+//    if (!NT_SUCCESS(status)) {
+//        WdfRequestComplete(request, status);
+//        return;
+//    }
+//
+//    // Dispatch to higher level driver
+//    WDF_REQUEST_SEND_OPTIONS options;
+//    WDF_REQUEST_SEND_OPTIONS_INIT(&options, WDF_REQUEST_SEND_OPTION_SEND_AND_FORGET);
+//
+//    if (WdfRequestSend(request, WdfDeviceGetIoTarget(hDevice), &options) == FALSE) {
+//        NTSTATUS status = WdfRequestGetStatus(request);
+//        DebugPrint(("[MouseTrap] WdfRequestSend failed: 0x%x\n", status));
+//        WdfRequestComplete(request, status);
+//    }
+//}
 
 _Use_decl_annotations_
 NTSTATUS IddRustDeskAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG_IN_ADAPTER_INIT_FINISHED* pInArgs)
