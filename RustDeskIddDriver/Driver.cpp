@@ -887,6 +887,7 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
     // https://docs.microsoft.com/zh-cn/windows-hardware/drivers/display/iddcx-objects
 
     NTSTATUS Status = STATUS_SUCCESS;
+    // TODO: make sure if Buffer should be freed manually?
     PVOID  Buffer;
     size_t BufSize;
     auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(Device);
@@ -950,65 +951,6 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
         WdfRequestComplete(Request, Status);
     }
 }
-
-// https://github.com/zhaohengyi/Win_Dev_Driver_Code/blob/master/04/WDF_CY001/ReadWrite.c
-//void MouseTrapEvtIoInternalDeviceControl(WDFQUEUE queue, WDFREQUEST request, size_t outputBufferLength, size_t inputBufferLength, ULONG ioControlCode) {
-//    UNREFERENCED_PARAMETER(outputBufferLength);
-//    UNREFERENCED_PARAMETER(inputBufferLength);
-//
-//    NTSTATUS status = STATUS_SUCCESS;
-//
-//    PAGED_CODE(); // Ensure paging is allowed in current IRQL
-//
-//    // Get extension data
-//    WDFDEVICE hDevice = WdfIoQueueGetDevice(queue);
-//    PDEVICE_CONTEXT context = DeviceGetContext(hDevice);
-//
-//    if (ioControlCode == IOCTL_INTERNAL_MOUSE_CONNECT) {
-//        // Only allow one connection.
-//        if (context->UpperConnectData.ClassService == NULL) {
-//            // Copy the connection parameters to the device extension.
-//            PCONNECT_DATA connectData;
-//            size_t length;
-//            status = WdfRequestRetrieveInputBuffer(request, sizeof(CONNECT_DATA), &connectData, &length);
-//            if (NT_SUCCESS(status)) {
-//                // Hook into the report chain (I am not sure this is correct)
-//                context->UpperConnectData = *connectData;
-//                connectData->ClassDeviceObject = WdfDeviceWdmGetDeviceObject(hDevice);
-//
-//#pragma warning(push)
-//#pragma warning(disable:4152)
-//                connectData->ClassService = MouseTrapServiceCallback;
-//#pragma warning(pop)
-//            }
-//            else {
-//                DebugPrint(("[MouseTrap] WdfRequestRetrieveInputBuffer failed %x\n", status));
-//            }
-//        }
-//        else {
-//            status = STATUS_SHARING_VIOLATION;
-//        }
-//    }
-//    else if (ioControlCode == IOCTL_INTERNAL_MOUSE_DISCONNECT) {
-//        status = STATUS_NOT_IMPLEMENTED;
-//    }
-//
-//    // Complete on error
-//    if (!NT_SUCCESS(status)) {
-//        WdfRequestComplete(request, status);
-//        return;
-//    }
-//
-//    // Dispatch to higher level driver
-//    WDF_REQUEST_SEND_OPTIONS options;
-//    WDF_REQUEST_SEND_OPTIONS_INIT(&options, WDF_REQUEST_SEND_OPTION_SEND_AND_FORGET);
-//
-//    if (WdfRequestSend(request, WdfDeviceGetIoTarget(hDevice), &options) == FALSE) {
-//        NTSTATUS status = WdfRequestGetStatus(request);
-//        DebugPrint(("[MouseTrap] WdfRequestSend failed: 0x%x\n", status));
-//        WdfRequestComplete(request, status);
-//    }
-//}
 
 _Use_decl_annotations_
 NTSTATUS IddRustDeskAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG_IN_ADAPTER_INIT_FINISHED* pInArgs)

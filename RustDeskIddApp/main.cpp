@@ -5,6 +5,16 @@
 #include <swdevice.h>
 #include <conio.h>
 #include <wrl.h>
+#include <ioapiset.h>
+
+#include "../RustDeskIddDriver/IOCTL.h"
+
+#define IDD_DRIVER_NAME             L"RustDeskIddDriver"
+#define IDD_DRIVER_NAME_WITH_EXT    L"RustDeskIddDriver.sys"
+
+// #define IDD_NT_DEVICE_NAME          L"\\Device\\RustDeskIddDriver"
+// #define IDD_DOS_DEVICES_LINK_NAME   L"\\DosDevices\\RustDeskIddDriver"
+#define IDD_WIN32_DEVICE_NAME       L"\\\\.\\RustDeskIddDriver"
 
 VOID WINAPI
 CreationCallback(
@@ -71,20 +81,101 @@ int __cdecl main(int argc, wchar_t *argv[])
         return 1;
     }
     printf("Device created\n\n");
+
+    HANDLE hDevice = INVALID_HANDLE_VALUE;
+    if (hDevice == INVALID_HANDLE_VALUE) {
+        hDevice = CreateFileW(
+            IDD_WIN32_DEVICE_NAME,
+            GENERIC_READ | GENERIC_WRITE,
+            0,
+            NULL,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            NULL
+        );
+
+        if (hDevice == INVALID_HANDLE_VALUE)
+        {
+            printf("Idd device: CreateFile(%ls) failed, last error 0x%x\n", IDD_WIN32_DEVICE_NAME, GetLastError());
+        }
+    }
     
     // Now wait for user to indicate the device should be stopped
     printf("Press 'x' to exit and destory the software device\n");
+    printf("Press 'i' to plug in monitor\n");
+    printf("Press 'o' to plug out monitor\n");
     bool bExit = false;
     do
     {
         // Wait for key press
         int key = _getch();
+        DWORD junk = 0;
 
-        if (key == 'x' || key == 'X')
+        switch (key)
         {
+        case 'x':
+        case 'X':
             bExit = true;
+            break;
+        case 'i':
+        case 'I':
+            if (hDevice == INVALID_HANDLE_VALUE)
+            {
+                break;
+            }
+
+            // plug in monitor
+            CtlPlugIn plugIn;
+            plugIn.ConnectorIndex = 0;
+            CoCreateGuid(&plugIn.ContainerId);
+            if (!DeviceIoControl(
+                hDevice,
+                IOCTL_CHANGER_IDD_PLUG_IN,
+                &plugIn,                    // Ptr to InBuffer
+                sizeof(CtlPlugIn),          // Length of InBuffer
+                NULL,                       // Ptr to OutBuffer
+                0,                          // Length of OutBuffer
+                &junk,                      // BytesReturned
+                0))                         // Ptr to Overlapped structure
+            {
+                DWORD code = GetLastError();
+                printf("DeviceIoControl failed with error 0x%x\n", code);
+            }
+            break;
+        case 'o':
+        case 'O':
+            if (hDevice == INVALID_HANDLE_VALUE)
+            {
+                break;
+            }
+
+            // plug out monitor
+            CtlPlugOut plugOut;
+            plugOut.ConnectorIndex = 0;
+            if (!DeviceIoControl(
+                hDevice,
+                IOCTL_CHANGER_IDD_PLUG_OUT,
+                &plugOut,               // Ptr to InBuffer
+                sizeof(CtlPlugOut),     // Length of InBuffer
+                NULL,                   // Ptr to OutBuffer
+                0,                      // Length of OutBuffer
+                &junk,                  // BytesReturned
+                0))                     // Ptr to Overlapped structure
+            {
+                DWORD code = GetLastError();
+                printf("DeviceIoControl failed with error 0x%x\n", code);
+            }
+            break;
+        default:
+            break;
         }
+
     }while (!bExit);
+
+    if (hDevice != INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(hDevice);
+    }
     
     // Stop the device, this will cause the sample to be unloaded
     SwDeviceClose(hSwDevice);
