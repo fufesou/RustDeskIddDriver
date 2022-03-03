@@ -19,13 +19,11 @@ Environment:
 
 #include "Driver.h"
 #include "Driver.tmh"
+#include "IOCTL.h"
 
 using namespace std;
 using namespace Microsoft::IndirectDisp;
 using namespace Microsoft::WRL;
-
-#define STATUS_ERROR_MONITOR_EXISTS (3 << 30) + 1
-#define STATUS_ERROR_MONITOR_NOT_EXISTS (3 << 30) + 2
 
 #pragma region SampleMonitors
 
@@ -209,7 +207,7 @@ extern "C" NTSTATUS DriverEntry(
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DRIVER,
-            "%!FUNC! Cannot create device %!STATUS!",
+            "%!FUNC! cannot create device %!STATUS!",
             Status);
         WPP_CLEANUP(WdfDriverWdmGetDriverObject(Driver));
         return Status;
@@ -242,9 +240,6 @@ NTSTATUS IddRustDeskDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 
     // If the driver wishes to handle custom IoDeviceControl requests, it's necessary to use this callback since IddCx
     // redirects IoDeviceControl requests to an internal queue. This sample does not need this.
-    // 接着，我们可以利用 EvtIddCxDeviceIoControl  这个IOCTL 回调函数，
-    // 接收从我们的应用层控制程序发来的插入或者移除虚拟显示器的命令。
-    // 从而创建或者删除 IDDCX_MONITOR对象来达到我们控制虚拟显示器的目的。
     // https://docs.microsoft.com/zh-cn/windows-hardware/drivers/display/iddcx-objects
     IddConfig.EvtIddCxDeviceIoControl = IddRustDeskIoDeviceControl;
 
@@ -262,7 +257,7 @@ NTSTATUS IddRustDeskDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DRIVER,
-            "%!FUNC! Cannot init device config %!STATUS!",
+            "%!FUNC! cannot init device config %!STATUS!",
             Status);
         return Status;
     }
@@ -285,7 +280,7 @@ NTSTATUS IddRustDeskDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DEVICE,
-            "%!FUNC! Cannot create device %!STATUS!",
+            "%!FUNC! cannot create device %!STATUS!",
             Status);
         return Status;
     }
@@ -295,7 +290,7 @@ NTSTATUS IddRustDeskDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DEVICE,
-            "%!FUNC! Cannot initialize device %!STATUS!",
+            "%!FUNC! cannot initialize device %!STATUS!",
             Status);
     }
 
@@ -340,7 +335,7 @@ HRESULT Direct3DDevice::Init()
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DRIVER,
-            "%!FUNC! Cannot create dxgi factory2 %!HRESULT!",
+            "%!FUNC! cannot create dxgi factory2 %!HRESULT!",
             hr);
         return hr;
     }
@@ -351,7 +346,7 @@ HRESULT Direct3DDevice::Init()
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DRIVER,
-            "%!FUNC! Cannot enum adapter by luid %!HRESULT!",
+            "%!FUNC! cannot enum adapter by luid %!HRESULT!",
             hr);
         return hr;
     }
@@ -362,7 +357,7 @@ HRESULT Direct3DDevice::Init()
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DRIVER,
-            "%!FUNC! Cannot create d3d11 device %!HRESULT!",
+            "%!FUNC! cannot create d3d11 device %!HRESULT!",
             hr);
 
         // If creating the D3D device failed, it's possible the render GPU was lost (e.g. detachable GPU) or else the
@@ -430,7 +425,7 @@ void SwapChainProcessor::RunCore()
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DRIVER,
-            "%!FUNC! Cannot convert dxgi device %!HRESULT!",
+            "%!FUNC! cannot convert dxgi device %!HRESULT!",
             hr);
         return;
     }
@@ -443,7 +438,7 @@ void SwapChainProcessor::RunCore()
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DRIVER,
-            "%!FUNC! Cannot swap chain set device %!HRESULT!",
+            "%!FUNC! cannot swap chain set device %!HRESULT!",
             hr);
 
         return;
@@ -525,7 +520,7 @@ void SwapChainProcessor::RunCore()
             {
                 TraceEvents(TRACE_LEVEL_ERROR,
                     TRACE_DRIVER,
-                    "%!FUNC! Cannot finish processing frame %!HRESULT!",
+                    "%!FUNC! cannot finish processing frame %!HRESULT!",
                     hr);
                 break;
             }
@@ -553,8 +548,9 @@ void SwapChainProcessor::RunCore()
 
 #pragma region IndirectDeviceContext
 
-IndirectDeviceContext::IndirectDeviceContext(_In_ WDFDEVICE WdfDevice) :
-    m_WdfDevice(WdfDevice)
+IndirectDeviceContext::IndirectDeviceContext(_In_ WDFDEVICE WdfDevice)
+    : m_AdapterInitStatus(STATUS_ERROR_ADAPTER_NOT_INIT)
+    , m_WdfDevice(WdfDevice)
 {
     m_Adapter = {};
 
@@ -636,7 +632,7 @@ void IndirectDeviceContext::InitAdapter()
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DEVICE,
-            "%!FUNC! Cannot init adapter %!STATUS!",
+            "%!FUNC! cannot init adapter %!STATUS!",
             Status);
     }
 }
@@ -706,7 +702,7 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
         {
             TraceEvents(TRACE_LEVEL_ERROR,
                 TRACE_DEVICE,
-                "%!FUNC! Cannot tell the OS that the monitor has been plugged in %!STATUS!",
+                "%!FUNC! cannot tell the OS that the monitor has been plugged in %!STATUS!",
                 Status);
         }
     }
@@ -714,15 +710,26 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DEVICE,
-            "%!FUNC! Cannot create monitor %!STATUS!",
+            "%!FUNC! cannot create monitor %!STATUS!",
             Status);
     }
 }
 
 NTSTATUS IndirectDeviceContext::PlugInMonitor(UINT ConnectorIndex, GUID ContainerID)
 {
+    if (!NT_SUCCESS(m_AdapterInitStatus))
+    {
+        TraceEvents(TRACE_LEVEL_ERROR,
+            TRACE_DEVICE,
+            "%!FUNC! adapter init failed %!STATUS!", m_AdapterInitStatus);
+        return m_AdapterInitStatus;
+    }
+
     if (m_Monitors[ConnectorIndex] != NULL)
     {
+        TraceEvents(TRACE_LEVEL_ERROR,
+            TRACE_DEVICE,
+            "%!FUNC! monitor of index %ud already exists", ConnectorIndex);
         return STATUS_ERROR_MONITOR_EXISTS;
     }
 
@@ -784,7 +791,7 @@ NTSTATUS IndirectDeviceContext::PlugInMonitor(UINT ConnectorIndex, GUID Containe
         {
             TraceEvents(TRACE_LEVEL_ERROR,
                 TRACE_DEVICE,
-                "%!FUNC! Cannot tell the OS that the monitor has been plugged in %!STATUS!",
+                "%!FUNC! cannot tell the OS that the monitor has been plugged in %!STATUS!",
                 Status);
         }
     }
@@ -792,7 +799,7 @@ NTSTATUS IndirectDeviceContext::PlugInMonitor(UINT ConnectorIndex, GUID Containe
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DEVICE,
-            "%!FUNC! Cannot create monitor %!STATUS!",
+            "%!FUNC! cannot create monitor %!STATUS!",
             Status);
     }
     return Status;
@@ -842,7 +849,7 @@ void IndirectMonitorContext::AssignSwapChain(IDDCX_SWAPCHAIN SwapChain, LUID Ren
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DEVICE,
-            "%!FUNC! Cannot init Direct3DDevice");
+            "%!FUNC! cannot init Direct3DDevice");
 
         // It's important to delete the swap-chain if D3D initialization fails, so that the OS knows to generate a new
         // swap-chain and try again.
@@ -877,12 +884,71 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
     UNREFERENCED_PARAMETER(Request);
     UNREFERENCED_PARAMETER(OutputBufferLength);
     UNREFERENCED_PARAMETER(InputBufferLength);
-    UNREFERENCED_PARAMETER(IoControlCode);
     // https://docs.microsoft.com/zh-cn/windows-hardware/drivers/display/iddcx-objects
 
+    NTSTATUS Status = STATUS_SUCCESS;
+    PVOID  Buffer;
+    size_t BufSize;
     auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(Device);
-    UNREFERENCED_PARAMETER(pContext);
-    // pContext->pContext->InitAdapter();
+
+    switch (IoControlCode)
+    {
+    case IOCTL_CHANGER_IDD_PLUG_IN:
+        PCtlPlugIn pCtlPlugIn;
+        Status = WdfRequestRetrieveInputBuffer(Request, sizeof(CtlPlugIn), &Buffer, &BufSize);
+        if (!NT_SUCCESS(Status)) {
+            TraceEvents(TRACE_LEVEL_ERROR,
+                TRACE_DEVICE,
+                "%!FUNC! cannot retrieve input buffer %!STATUS!",
+                Status);
+            break;
+        }
+        pCtlPlugIn = (PCtlPlugIn)Buffer;
+        Status = pContext->pContext->PlugInMonitor(pCtlPlugIn->ConnectorIndex, pCtlPlugIn->ContainerId);
+        break;
+    case IOCTL_CHANGER_IDD_PLUG_OUT:
+        PCtlPlugOut pCtlPlugOut;
+        Status = WdfRequestRetrieveInputBuffer(Request, sizeof(PCtlPlugOut), &Buffer, &BufSize);
+        if (!NT_SUCCESS(Status))
+        {
+            TraceEvents(TRACE_LEVEL_ERROR,
+                TRACE_DEVICE,
+                "%!FUNC! cannot retrieve input buffer %!STATUS!",
+                Status);
+            break;
+        }
+        pCtlPlugOut = (PCtlPlugOut)Buffer;
+        Status = pContext->pContext->PlugOutMonitor(pCtlPlugOut->ConnectorIndex);
+        break;
+    default:
+        TraceEvents(TRACE_LEVEL_ERROR,
+            TRACE_DEVICE,
+            "%!FUNC! unknown io ctrl code %ud",
+            IoControlCode);
+        Status = STATUS_NOT_IMPLEMENTED;
+        break;
+    }
+
+    // Complete on error
+    if (!NT_SUCCESS(Status))
+    {
+        WdfRequestComplete(Request, Status);
+        return;
+    }
+
+    // Dispatch to higher level driver
+    WDF_REQUEST_SEND_OPTIONS Options;
+    WDF_REQUEST_SEND_OPTIONS_INIT(&Options, WDF_REQUEST_SEND_OPTION_SEND_AND_FORGET);
+
+    if (WdfRequestSend(Request, WdfDeviceGetIoTarget(Device), &Options) == FALSE)
+    {
+        Status = WdfRequestGetStatus(Request);
+        TraceEvents(TRACE_LEVEL_ERROR,
+            TRACE_DEVICE,
+            "%!FUNC! WdfRequestSend failed %!STATUS!",
+            Status);
+        WdfRequestComplete(Request, Status);
+    }
 }
 
 // https://github.com/zhaohengyi/Win_Dev_Driver_Code/blob/master/04/WDF_CY001/ReadWrite.c
@@ -951,13 +1017,27 @@ NTSTATUS IddRustDeskAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG
     // to report attached monitors.
 
     auto* pDeviceContextWrapper = WdfObjectGet_IndirectDeviceContextWrapper(AdapterObject);
-    if (NT_SUCCESS(pInArgs->AdapterInitStatus))
+    auto Status = pInArgs->AdapterInitStatus;
+    if (NT_SUCCESS(Status))
     {
-        for (DWORD i = 0; i < IDD_SAMPLE_MONITOR_COUNT; i++)
+        TraceEvents(TRACE_LEVEL_INFORMATION,
+            TRACE_DEVICE,
+            "%!FUNC! adapter init success");
+
+/*        for (DWORD i = 0; i < IDD_SAMPLE_MONITOR_COUNT; i++)
         {
             pDeviceContextWrapper->pContext->FinishInit(i);
-        }
+        }  */     
     }
+    else
+    {
+        TraceEvents(TRACE_LEVEL_ERROR,
+            TRACE_DEVICE,
+            "%!FUNC! adapter init failed %!STATUS!",
+            Status);
+    }
+
+    pDeviceContextWrapper->pContext->SetAdapterInitStatus(Status);
 
     return STATUS_SUCCESS;
 }
