@@ -39,7 +39,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Driver.h" />
-    <ClInclude Include="IOCTL.h" />
+    <ClInclude Include="Public.h" />
     <ClInclude Include="Trace.h" />
   </ItemGroup>
   <ItemGroup>

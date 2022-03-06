@@ -21,3 +21,7 @@ typedef struct _CtlPlugIn {
 typedef struct _CtlPlugOut {
     UINT ConnectorIndex;
 } CtlPlugOut, *PCtlPlugOut;
+
+
+#define SYMBOLIC_LINK_NAME L"\\Device\\RustDeskIddDriver"
+

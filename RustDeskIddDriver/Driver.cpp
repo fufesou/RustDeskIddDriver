@@ -19,7 +19,18 @@ Environment:
 
 #include "Driver.h"
 #include "Driver.tmh"
-#include "IOCTL.h"
+#include "Public.h"
+
+//
+// Define an Interface Guid for RustDeskIddDriver device class.
+// This GUID is used to register (IoRegisterDeviceInterface)
+// an instance of an interface so that user application
+// can control the RustDeskIddDriver device.
+//
+const GUID GUID_DEVINTERFACE_IDD_DRIVER_DEVICE = \
+    { 0x781EF630, 0x72B2, 0x11d2, { 0xB8, 0x52,  0x00,  0xC0,  0x4E,  0xAF,  0x52,  0x72 } };
+//{781EF630-72B2-11d2-B852-00C04EAF5272}
+
 
 using namespace std;
 using namespace Microsoft::IndirectDisp;
@@ -210,7 +221,13 @@ extern "C" NTSTATUS DriverEntry(
             "%!FUNC! cannot create device %!STATUS!",
             Status);
         WPP_CLEANUP(WdfDriverWdmGetDriverObject(Driver));
-        return Status;
+    }
+    else
+    {
+        TraceEvents(TRACE_LEVEL_INFORMATION,
+            TRACE_DRIVER,
+            "%!FUNC! driver created with path %wZ",
+            pRegistryPath);
     }
 
     return Status;
@@ -222,6 +239,13 @@ void RustDeskIddDriverUnload(_In_ WDFDRIVER /*Driver*/)
     WPP_CLEANUP(WdfDriverWdmGetDriverObject(Driver));
 }
 
+// https://community.osr.com/discussion/290895/how-to-realize-hot-plug-function-of-virtual-display-with-indirect-display
+// Hi,
+// in Indirect display driver, after use WdfDeviceCreateDeviceInterface to create guid, 
+// you should use IddCxDeviceInitialize, IddDeviceIoControl is not the same as other wdf's DeviceIoControl function,
+// his first argument is WDFDEVICE Device,not WDFQUEUE,
+// so you don't need to use WdfIoQueueCreate to create a queue to receive I / O queue message.
+// After all of the above, you should create IOCTL code, this can establish communication between applicationand idd device.
 _Use_decl_annotations_
 NTSTATUS IddRustDeskDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 {
@@ -285,6 +309,44 @@ NTSTATUS IddRustDeskDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
         return Status;
     }
 
+    //DECLARE_CONST_UNICODE_STRING(SymbolicLinkName, L"\\Device\\RustDeskIddDriver");
+    //Status = WdfDeviceCreateSymbolicLink(Device, &SymbolicLinkName);
+    //if (!NT_SUCCESS(Status)) {
+    //    //
+    //    // Control device will be deleted automatically by the framework.
+    //    //
+    //    TraceEvents(TRACE_LEVEL_ERROR,
+    //        TRACE_DEVICE,
+    //        "%!FUNC! WdfDeviceCreateSymbolicLink failed %!STATUS!",
+    //        Status);
+    //    return Status;
+    //}
+
+    //
+    // Get the device context.
+    //
+    //deviceData = FdoGetData(device);
+
+    //
+    // Create device interface for this device. The interface will be
+    // enabled by the framework when we return from StartDevice successfully.
+    // Clients of this driver will open this interface and send ioctls.
+    //
+    Status = WdfDeviceCreateDeviceInterface(
+        Device,
+        &GUID_DEVINTERFACE_IDD_DRIVER_DEVICE,
+        NULL // No Reference String. If you provide one it will appended to the
+    );   // symbolic link. Some drivers register multiple interfaces for the same device
+         // and use the reference string to distinguish between them
+    if (!NT_SUCCESS(Status))
+    {
+        TraceEvents(TRACE_LEVEL_ERROR,
+            TRACE_DEVICE,
+            "%!FUNC! WdfDeviceCreateDeviceInterface failed %!STATUS!",
+            Status);
+        return Status;
+    }
+
     Status = IddCxDeviceInitialize(Device);
     if (!NT_SUCCESS(Status))
     {
@@ -292,6 +354,7 @@ NTSTATUS IddRustDeskDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
             TRACE_DEVICE,
             "%!FUNC! cannot initialize device %!STATUS!",
             Status);
+        return Status;
     }
 
     // Create a new device context object and attach it to the WDF device object

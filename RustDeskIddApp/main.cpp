@@ -6,15 +6,26 @@
 #include <conio.h>
 #include <wrl.h>
 #include <ioapiset.h>
+#include <SetupAPI.h>
+#include <cfgmgr32.h>
+#include <strsafe.h>
 
-#include "../RustDeskIddDriver/IOCTL.h"
+#include "../RustDeskIddDriver/Public.h"
 
-#define IDD_DRIVER_NAME             L"RustDeskIddDriver"
-#define IDD_DRIVER_NAME_WITH_EXT    L"RustDeskIddDriver.sys"
+const GUID GUID_DEVINTERFACE_IDD_DRIVER_DEVICE = \
+{ 0x781EF630, 0x72B2, 0x11d2, { 0xB8, 0x52,  0x00,  0xC0,  0x4E,  0xAF,  0x52,  0x72 } };
+//{781EF630-72B2-11d2-B852-00C04EAF5272}
+
+// https://stackoverflow.com/questions/67164846/createfile-fails-unless-i-disable-enable-my-device
+
+//#define IDD_DRIVER_NAME             L"RustDeskIddDriver"
+//#define IDD_DRIVER_NAME_WITH_EXT    L"RustDeskIddDriver.sys"
 
 // #define IDD_NT_DEVICE_NAME          L"\\Device\\RustDeskIddDriver"
 // #define IDD_DOS_DEVICES_LINK_NAME   L"\\DosDevices\\RustDeskIddDriver"
-#define IDD_WIN32_DEVICE_NAME       L"\\\\.\\RustDeskIddDriver"
+//#define IDD_WIN32_DEVICE_NAME       L"\\\\.\\RustDeskIddDriver"
+
+WCHAR deviceInstanceId[256] = {0};
 
 VOID WINAPI
 CreationCallback(
@@ -29,13 +40,91 @@ CreationCallback(
     SetEvent(hEvent);
     UNREFERENCED_PARAMETER(hSwDevice);
     UNREFERENCED_PARAMETER(hrCreateResult);
-    UNREFERENCED_PARAMETER(pszDeviceInstanceId);
+    printf("Idd device %ls created\n", pszDeviceInstanceId);
+    wsprintfW(deviceInstanceId, L"\\\\.\\GLOBAL??\\%s", pszDeviceInstanceId);
 }
+
+BOOLEAN
+GetDevicePath(
+    _In_ LPCGUID InterfaceGuid,
+    _Out_writes_(BufLen) PWCHAR DevicePath,
+    _In_ size_t BufLen
+)
+{
+    CONFIGRET cr = CR_SUCCESS;
+    PWSTR deviceInterfaceList = NULL;
+    ULONG deviceInterfaceListLength = 0;
+    PWSTR nextInterface;
+    HRESULT hr = E_FAIL;
+    BOOLEAN bRet = TRUE;
+
+    cr = CM_Get_Device_Interface_List_SizeW(
+        &deviceInterfaceListLength,
+        (LPGUID)InterfaceGuid,
+        NULL,
+        CM_GET_DEVICE_INTERFACE_LIST_PRESENT);
+    if (cr != CR_SUCCESS) {
+        printf("Error 0x%x retrieving device interface list size.\n", cr);
+        goto clean0;
+    }
+
+    if (deviceInterfaceListLength <= 1) {
+        bRet = FALSE;
+        printf("Error: No active device interfaces found.\n"
+            " Is the sample driver loaded?\n");
+        goto clean0;
+    }
+
+    deviceInterfaceList = (PWSTR)malloc(deviceInterfaceListLength * sizeof(WCHAR));
+    if (deviceInterfaceList == NULL) {
+        printf("Error allocating memory for device interface list.\n");
+        goto clean0;
+    }
+    ZeroMemory(deviceInterfaceList, deviceInterfaceListLength * sizeof(WCHAR));
+
+    cr = CM_Get_Device_Interface_ListW(
+        (LPGUID)InterfaceGuid,
+        NULL,
+        deviceInterfaceList,
+        deviceInterfaceListLength,
+        CM_GET_DEVICE_INTERFACE_LIST_PRESENT);
+    if (cr != CR_SUCCESS) {
+        printf("Error 0x%x retrieving device interface list.\n", cr);
+        goto clean0;
+    }
+
+    nextInterface = deviceInterfaceList + wcslen(deviceInterfaceList) + 1;
+    if (*nextInterface != UNICODE_NULL) {
+        printf("Warning: More than one device interface instance found. \n"
+            "Selecting first matching device.\n\n");
+    }
+
+    hr = StringCchCopyW(DevicePath, BufLen, deviceInterfaceList);
+    if (FAILED(hr)) {
+        bRet = FALSE;
+        printf("Error: StringCchCopy failed with HRESULT 0x%x", hr);
+        goto clean0;
+    }
+
+clean0:
+    if (deviceInterfaceList != NULL) {
+        free(deviceInterfaceList);
+    }
+    if (CR_SUCCESS != cr) {
+        bRet = FALSE;
+    }
+
+    return bRet;
+}
+
+#define MAX_DEVPATH_LENGTH                       256
 
 int __cdecl main(int argc, wchar_t *argv[])
 {
     UNREFERENCED_PARAMETER(argc);
     UNREFERENCED_PARAMETER(argv);
+
+    WCHAR devicePath[MAX_DEVPATH_LENGTH] = { 0 };
 
     HANDLE hEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     HSWDEVICE hSwDevice;
@@ -83,9 +172,10 @@ int __cdecl main(int argc, wchar_t *argv[])
     printf("Device created\n\n");
 
     HANDLE hDevice = INVALID_HANDLE_VALUE;
-    if (hDevice == INVALID_HANDLE_VALUE) {
+    if (GetDevicePath(&GUID_DEVINTERFACE_IDD_DRIVER_DEVICE, devicePath, sizeof(devicePath) / sizeof(devicePath[0])))
+    {
         hDevice = CreateFileW(
-            IDD_WIN32_DEVICE_NAME,
+            devicePath,
             GENERIC_READ | GENERIC_WRITE,
             0,
             NULL,
@@ -93,11 +183,10 @@ int __cdecl main(int argc, wchar_t *argv[])
             FILE_ATTRIBUTE_NORMAL,
             NULL
         );
-
-        if (hDevice == INVALID_HANDLE_VALUE)
-        {
-            printf("Idd device: CreateFile(%ls) failed, last error 0x%x\n", IDD_WIN32_DEVICE_NAME, GetLastError());
-        }
+    }
+    if (hDevice == INVALID_HANDLE_VALUE)
+    {
+        wprintf(L"Idd device: CreateFile %s failed, last error 0x%x\n", devicePath, GetLastError());
     }
     
     // Now wait for user to indicate the device should be stopped
@@ -119,8 +208,10 @@ int __cdecl main(int argc, wchar_t *argv[])
             break;
         case 'i':
         case 'I':
+            printf("begin plug in monitor\n");
             if (hDevice == INVALID_HANDLE_VALUE)
             {
+                printf("device handler is not created, ignore plug in\n");
                 break;
             }
 
@@ -141,11 +232,17 @@ int __cdecl main(int argc, wchar_t *argv[])
                 DWORD code = GetLastError();
                 printf("DeviceIoControl failed with error 0x%x\n", code);
             }
+            else
+            {
+                printf("plug in monitor done\n");
+            }
             break;
         case 'o':
         case 'O':
+            printf("begin plug out monitor\n");
             if (hDevice == INVALID_HANDLE_VALUE)
             {
+                printf("device handler is not created, ignore plug out\n");
                 break;
             }
 
@@ -164,6 +261,9 @@ int __cdecl main(int argc, wchar_t *argv[])
             {
                 DWORD code = GetLastError();
                 printf("DeviceIoControl failed with error 0x%x\n", code);
+            }
+            {
+                printf("plug out monitor done\n");
             }
             break;
         default:
