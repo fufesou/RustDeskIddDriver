@@ -323,11 +323,6 @@ NTSTATUS IddRustDeskDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
     //}
 
     //
-    // Get the device context.
-    //
-    //deviceData = FdoGetData(device);
-
-    //
     // Create device interface for this device. The interface will be
     // enabled by the framework when we return from StartDevice successfully.
     // Clients of this driver will open this interface and send ioctls.
@@ -780,6 +775,11 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
 
 NTSTATUS IndirectDeviceContext::PlugInMonitor(UINT ConnectorIndex, GUID ContainerID)
 {
+    TraceEvents(TRACE_LEVEL_INFORMATION,
+        TRACE_DEVICE,
+        "%!FUNC! begin plug in monitor %ud",
+        ConnectorIndex);
+
     if (!NT_SUCCESS(m_AdapterInitStatus))
     {
         TraceEvents(TRACE_LEVEL_ERROR,
@@ -792,7 +792,7 @@ NTSTATUS IndirectDeviceContext::PlugInMonitor(UINT ConnectorIndex, GUID Containe
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DEVICE,
-            "%!FUNC! monitor of index %ud already exists", ConnectorIndex);
+            "%!FUNC! monitor of index %u already exists", ConnectorIndex);
         return STATUS_ERROR_MONITOR_EXISTS;
     }
 
@@ -870,6 +870,11 @@ NTSTATUS IndirectDeviceContext::PlugInMonitor(UINT ConnectorIndex, GUID Containe
 
 NTSTATUS IndirectDeviceContext::PlugOutMonitor(UINT ConnectorIndex)
 {
+    TraceEvents(TRACE_LEVEL_INFORMATION,
+        TRACE_DEVICE,
+        "%!FUNC! begin plug out monitor %ud",
+        ConnectorIndex);
+
     if (m_Monitors[ConnectorIndex] == NULL)
     {
         return STATUS_ERROR_MONITOR_NOT_EXISTS;
@@ -879,8 +884,9 @@ NTSTATUS IndirectDeviceContext::PlugOutMonitor(UINT ConnectorIndex)
     {
         TraceEvents(TRACE_LEVEL_INFORMATION,
             TRACE_DEVICE,
-            "%!FUNC! plug in monitor %ud done",
+            "%!FUNC! plug out monitor %ud done",
             ConnectorIndex);
+        m_Monitors[ConnectorIndex] = NULL;
     }
     else
     {
@@ -950,10 +956,13 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
     // https://docs.microsoft.com/zh-cn/windows-hardware/drivers/display/iddcx-objects
 
     NTSTATUS Status = STATUS_SUCCESS;
-    // TODO: make sure if Buffer should be freed manually?
     PVOID  Buffer;
     size_t BufSize;
     auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(Device);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION,
+        TRACE_DEVICE,
+        "%!FUNC! receive io control code %ul\n", IoControlCode);
 
     switch (IoControlCode)
     {
@@ -972,7 +981,7 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
         break;
     case IOCTL_CHANGER_IDD_PLUG_OUT:
         PCtlPlugOut pCtlPlugOut;
-        Status = WdfRequestRetrieveInputBuffer(Request, sizeof(PCtlPlugOut), &Buffer, &BufSize);
+        Status = WdfRequestRetrieveInputBuffer(Request, sizeof(CtlPlugOut), &Buffer, &BufSize);
         if (!NT_SUCCESS(Status))
         {
             TraceEvents(TRACE_LEVEL_ERROR,
@@ -993,26 +1002,12 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
         break;
     }
 
-    // Complete on error
-    if (!NT_SUCCESS(Status))
-    {
-        WdfRequestComplete(Request, Status);
-        return;
-    }
+    TraceEvents(TRACE_LEVEL_INFORMATION,
+        TRACE_DEVICE,
+        "%!FUNC! io control code %ul, %!STATUS!\n",
+        IoControlCode, Status);
 
-    // Dispatch to higher level driver
-    WDF_REQUEST_SEND_OPTIONS Options;
-    WDF_REQUEST_SEND_OPTIONS_INIT(&Options, WDF_REQUEST_SEND_OPTION_SEND_AND_FORGET);
-
-    if (WdfRequestSend(Request, WdfDeviceGetIoTarget(Device), &Options) == FALSE)
-    {
-        Status = WdfRequestGetStatus(Request);
-        TraceEvents(TRACE_LEVEL_ERROR,
-            TRACE_DEVICE,
-            "%!FUNC! WdfRequestSend failed %!STATUS!",
-            Status);
-        WdfRequestComplete(Request, Status);
-    }
+    WdfRequestComplete(Request, Status);
 }
 
 _Use_decl_annotations_
@@ -1032,7 +1027,7 @@ NTSTATUS IddRustDeskAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG
 /*        for (DWORD i = 0; i < IDD_SAMPLE_MONITOR_COUNT; i++)
         {
             pDeviceContextWrapper->pContext->FinishInit(i);
-        }  */     
+        }    */   
     }
     else
     {
