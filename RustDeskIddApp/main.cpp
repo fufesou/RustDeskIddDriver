@@ -9,6 +9,8 @@
 #include <SetupAPI.h>
 #include <cfgmgr32.h>
 #include <strsafe.h>
+#include <newdev.h>
+#include <tchar.h>
 
 #include "../RustDeskIddDriver/Public.h"
 
@@ -52,9 +54,9 @@ GetDevicePath(
 )
 {
     CONFIGRET cr = CR_SUCCESS;
-    PWSTR deviceInterfaceList = NULL;
+    PTSTR deviceInterfaceList = NULL;
     ULONG deviceInterfaceListLength = 0;
-    PWSTR nextInterface;
+    PTSTR nextInterface;
     HRESULT hr = E_FAIL;
     BOOLEAN bRet = TRUE;
 
@@ -74,32 +76,42 @@ GetDevicePath(
         bRet = FALSE;
         goto clean0;
     }
+    printf("deviceInterfaceListLength %u\n", deviceInterfaceListLength);
 
-    deviceInterfaceList = (PWSTR)malloc(deviceInterfaceListLength * sizeof(WCHAR));
+    deviceInterfaceList = (PTSTR)malloc(deviceInterfaceListLength * sizeof(TCHAR));
     if (deviceInterfaceList == NULL) {
         printf("Error allocating memory for device interface list.\n");
         bRet = FALSE;
         goto clean0;
     }
-    ZeroMemory(deviceInterfaceList, deviceInterfaceListLength * sizeof(WCHAR));
+    ZeroMemory(deviceInterfaceList, deviceInterfaceListLength * sizeof(TCHAR));
 
-    cr = CM_Get_Device_Interface_List(
-        (LPGUID)InterfaceGuid,
-        NULL,
-        deviceInterfaceList,
-        deviceInterfaceListLength,
-        CM_GET_DEVICE_INTERFACE_LIST_PRESENT);
-    if (cr != CR_SUCCESS) {
-        printf("Error 0x%x retrieving device interface list.\n", cr);
-        goto clean0;
+    for (int i=0; i<3 && _tcslen(deviceInterfaceList) == 0; i++)
+    {
+        cr = CM_Get_Device_Interface_List(
+            (LPGUID)InterfaceGuid,
+            NULL,
+            deviceInterfaceList,
+            deviceInterfaceListLength,
+            CM_GET_DEVICE_INTERFACE_LIST_PRESENT);
+        if (cr != CR_SUCCESS) {
+            printf("Error 0x%x retrieving device interface list.\n", cr);
+            goto clean0;
+        }
+        _tprintf(_T("get deviceInterfaceList %s\n"), deviceInterfaceList);
     }
 
-    nextInterface = deviceInterfaceList + wcslen(deviceInterfaceList) + 1;
+    nextInterface = deviceInterfaceList + _tcslen(deviceInterfaceList) + 1;
+#ifdef UNICODE
     if (*nextInterface != UNICODE_NULL) {
+#else
+    if (*nextInterface != ANSI_NULL) {
+#endif
         printf("Warning: More than one device interface instance found. \n"
             "Selecting first matching device.\n\n");
     }
 
+    printf("begin copy device path\n");
     hr = StringCchCopy(DevicePath, BufLen, deviceInterfaceList);
     if (FAILED(hr)) {
         printf("Error: StringCchCopy failed with HRESULT 0x%x", hr);
@@ -222,7 +234,7 @@ Clean0:
 #define MAX_DEVPATH_LENGTH                       256
 
 // TODOs:
-// 1. Select Driver Path to install.
+// 1. Check if should install driver?
 // 2. Open Driver device after installed.
 // 3. Add monitor device if no monitors detected.
 int __cdecl main(int argc, wchar_t *argv[])
@@ -230,8 +242,24 @@ int __cdecl main(int argc, wchar_t *argv[])
     UNREFERENCED_PARAMETER(argc);
     UNREFERENCED_PARAMETER(argv);
 
-    TCHAR devicePath[MAX_DEVPATH_LENGTH] = { 0 };
+    // install driver
+    if (FALSE == UpdateDriverForPlugAndPlayDevices(
+        NULL,
+        _T("RustDeskIddDriver"),
+        _T("C:\\Users\\cxl3\\Desktop\\Debug\\RustDeskIddDriver\\RustDeskIddDriver.inf"),
+        INSTALLFLAG_FORCE,
+        NULL
+    ))
+    {
+        printf("Idd device: UpdateDriverForPlugAndPlayDevicesW failed, last error 0x%x\n", GetLastError());
+    }
+    else
+    {
+        printf("Idd device: UpdateDriverForPlugAndPlayDevicesW done\n");
+    }
 
+
+    // create device
     HANDLE hEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     HSWDEVICE hSwDevice;
     SW_DEVICE_CREATE_INFO createInfo = { 0 };
@@ -252,41 +280,41 @@ int __cdecl main(int argc, wchar_t *argv[])
                                  SWDeviceCapabilitiesSilentInstall |
                                  SWDeviceCapabilitiesDriverRequired;
 
-    //// Create the device
-    //HRESULT hr = SwDeviceCreate(L"RustDeskIddDriver",
-    //                            L"HTREE\\ROOT\\0",
-    //                            &createInfo,
-    //                            0,
-    //                            nullptr,
-    //                            CreationCallback,
-    //                            &hEvent,
-    //                            &hSwDevice);
-    //if (FAILED(hr))
-    //{
-    //    printf("SwDeviceCreate failed with 0x%lx\n", hr);
-    //    return 1;
-    //}
+    // Create the device
+    HRESULT hr = SwDeviceCreate(L"RustDeskIddDriver",
+                                L"HTREE\\ROOT\\0",
+                                &createInfo,
+                                0,
+                                nullptr,
+                                CreationCallback,
+                                &hEvent,
+                                &hSwDevice);
+    if (FAILED(hr))
+    {
+        printf("SwDeviceCreate failed with 0x%lx\n", hr);
+        return 1;
+    }
 
     // Wait for callback to signal that the device has been created
-    //printf("Waiting for device to be created....\n");
-    //DWORD waitResult = WaitForSingleObject(hEvent, 10*1000);
-    //if (waitResult != WAIT_OBJECT_0)
-    //{
-    //    printf("Wait for device creation failed\n");
-    //    return 1;
-    //}
-    //printf("Device created\n\n");
+    printf("Waiting for device to be created....\n");
+    DWORD waitResult = WaitForSingleObject(hEvent, 10*1000);
+    if (waitResult != WAIT_OBJECT_0)
+    {
+        printf("Wait for device creation failed\n");
+        return 1;
+    }
+    printf("Device created\n\n");
 
-    //_getch();
+    _getch();
+
+
+    // open device for control
+    TCHAR devicePath[MAX_DEVPATH_LENGTH] = { 0 };
 
     HANDLE hDevice = INVALID_HANDLE_VALUE;
     if (GetDevicePath(&GUID_DEVINTERFACE_IDD_DRIVER_DEVICE, devicePath, sizeof(devicePath) / sizeof(devicePath[0])))
     {
-#ifdef UNICODE
-        wprintf(L"Idd device: try open %s\n", devicePath);
-#else
-        printf("Idd device: try open %s\n", devicePath);
-#endif
+        _tprintf(_T("Idd device: try open %s\n"), devicePath);
         hDevice = CreateFile(
             devicePath,
             GENERIC_READ | GENERIC_WRITE,
@@ -300,11 +328,7 @@ int __cdecl main(int argc, wchar_t *argv[])
     }
     if (hDevice == INVALID_HANDLE_VALUE)
     {
-#ifdef UNICODE
-        wprintf(L"Idd device: CreateFile %s failed, last error 0x%x\n", devicePath, GetLastError());
-#else
-        printf("Idd device: CreateFile %s failed, last error 0x%x\n", devicePath, GetLastError());
-#endif
+        _tprintf(_T("Idd device: CreateFile %s failed, last error 0x%x\n"), devicePath, GetLastError());
     }
     
     // Now wait for user to indicate the device should be stopped
@@ -398,7 +422,7 @@ int __cdecl main(int argc, wchar_t *argv[])
     }
     
     // Stop the device, this will cause the sample to be unloaded
-    // SwDeviceClose(hSwDevice);
+    SwDeviceClose(hSwDevice);
 
     return 0;
 }

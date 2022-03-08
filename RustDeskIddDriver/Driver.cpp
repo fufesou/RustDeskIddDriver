@@ -17,6 +17,8 @@ Environment:
     // https://docs.microsoft.com/en-us/windows-hardware/drivers/devtest/adding-wpp-software-tracing-to-a-windows-driver#step-5-instrument-the-driver-code-to-generate-trace-messages-at-appropriate-points
 --*/
 
+#include <tchar.h>
+
 #include "Driver.h"
 #include "Driver.tmh"
 #include "Public.h"
@@ -309,19 +311,6 @@ NTSTATUS IddRustDeskDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
         return Status;
     }
 
-    //DECLARE_CONST_UNICODE_STRING(SymbolicLinkName, L"\\Device\\RustDeskIddDriver");
-    //Status = WdfDeviceCreateSymbolicLink(Device, &SymbolicLinkName);
-    //if (!NT_SUCCESS(Status)) {
-    //    //
-    //    // Control device will be deleted automatically by the framework.
-    //    //
-    //    TraceEvents(TRACE_LEVEL_ERROR,
-    //        TRACE_DEVICE,
-    //        "%!FUNC! WdfDeviceCreateSymbolicLink failed %!STATUS!",
-    //        Status);
-    //    return Status;
-    //}
-
     //
     // Create device interface for this device. The interface will be
     // enabled by the framework when we return from StartDevice successfully.
@@ -462,7 +451,7 @@ void SwapChainProcessor::Run()
     // For improved performance, make use of the Multimedia Class Scheduler Service, which will intelligently
     // prioritize this thread for improved throughput in high CPU-load scenarios.
     DWORD AvTask = 0;
-    HANDLE AvTaskHandle = AvSetMmThreadCharacteristicsW(L"Distribution", &AvTask);
+    HANDLE AvTaskHandle = AvSetMmThreadCharacteristics(_T("Distribution"), &AvTask);
 
     RunCore();
 
