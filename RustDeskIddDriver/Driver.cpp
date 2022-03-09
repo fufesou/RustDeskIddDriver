@@ -766,7 +766,7 @@ NTSTATUS IndirectDeviceContext::PlugInMonitor(UINT ConnectorIndex, GUID Containe
 {
     TraceEvents(TRACE_LEVEL_INFORMATION,
         TRACE_DEVICE,
-        "%!FUNC! begin plug in monitor %ud",
+        "%!FUNC! begin plug in monitor %u",
         ConnectorIndex);
 
     if (!NT_SUCCESS(m_AdapterInitStatus))
@@ -861,7 +861,7 @@ NTSTATUS IndirectDeviceContext::PlugOutMonitor(UINT ConnectorIndex)
 {
     TraceEvents(TRACE_LEVEL_INFORMATION,
         TRACE_DEVICE,
-        "%!FUNC! begin plug out monitor %ud",
+        "%!FUNC! begin plug out monitor %u",
         ConnectorIndex);
 
     if (m_Monitors[ConnectorIndex] == NULL)
@@ -873,7 +873,7 @@ NTSTATUS IndirectDeviceContext::PlugOutMonitor(UINT ConnectorIndex)
     {
         TraceEvents(TRACE_LEVEL_INFORMATION,
             TRACE_DEVICE,
-            "%!FUNC! plug out monitor %ud done",
+            "%!FUNC! plug out monitor %u done",
             ConnectorIndex);
         m_Monitors[ConnectorIndex] = NULL;
     }
@@ -881,7 +881,7 @@ NTSTATUS IndirectDeviceContext::PlugOutMonitor(UINT ConnectorIndex)
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DEVICE,
-            "%!FUNC! cannot plug out monitor %ud %!STATUS!",
+            "%!FUNC! cannot plug out monitor %u %!STATUS!",
             ConnectorIndex,
             Status);
     }
@@ -938,11 +938,10 @@ _Use_decl_annotations_
 VOID
 IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBufferLength, size_t InputBufferLength, ULONG IoControlCode)
 {
-    // https://cpp.hotexamples.com/examples/-/-/WdfRequestSend/cpp-wdfrequestsend-function-examples.html
     UNREFERENCED_PARAMETER(Request);
     UNREFERENCED_PARAMETER(OutputBufferLength);
     UNREFERENCED_PARAMETER(InputBufferLength);
-    // https://docs.microsoft.com/zh-cn/windows-hardware/drivers/display/iddcx-objects
+    // https://docs.microsoft.com/en-us/windows-hardware/drivers/display/iddcx-objects
 
     NTSTATUS Status = STATUS_SUCCESS;
     PVOID  Buffer;
@@ -1011,7 +1010,7 @@ NTSTATUS IddRustDeskAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG
     {
         TraceEvents(TRACE_LEVEL_INFORMATION,
             TRACE_DEVICE,
-            "%!FUNC! adapter init success");
+            "%!FUNC! adapter init finished success");
 
 /*        for (DWORD i = 0; i < IDD_SAMPLE_MONITOR_COUNT; i++)
         {
@@ -1022,12 +1021,11 @@ NTSTATUS IddRustDeskAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG
     {
         TraceEvents(TRACE_LEVEL_ERROR,
             TRACE_DEVICE,
-            "%!FUNC! adapter init failed %!STATUS!",
+            "%!FUNC! adapter init finished failed %!STATUS!",
             Status);
     }
 
     pDeviceContextWrapper->pContext->SetAdapterInitStatus(Status);
-
     return STATUS_SUCCESS;
 }
 
