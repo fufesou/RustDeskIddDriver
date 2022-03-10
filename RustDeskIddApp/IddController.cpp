@@ -14,6 +14,7 @@ const GUID GUID_DEVINTERFACE_IDD_DRIVER_DEVICE = \
 { 0x781EF630, 0x72B2, 0x11d2, { 0xB8, 0x52,  0x00,  0xC0,  0x4E,  0xAF,  0x52,  0x72 } };
 //{781EF630-72B2-11d2-B852-00C04EAF5272}
 
+bool g_printMsg = true;
 char g_lastMsg[1024];
 const char* g_msgHeader = "RustDeskIdd: ";
 
@@ -76,7 +77,10 @@ BOOL InstallUpdate(LPCTSTR fullInfPath)
         if (error != 0)
         {
             SetLastMsg("UpdateDriverForPlugAndPlayDevicesW failed, last error 0x%x\n", error);
-            printf(g_lastMsg);
+            if (g_printMsg)
+            {
+                printf(g_lastMsg);
+            }
             return FALSE;
         }
     }
@@ -84,9 +88,64 @@ BOOL InstallUpdate(LPCTSTR fullInfPath)
     return TRUE;
 }
 
+BOOL DeviceCreated(BOOL* created)
+{
+    SetLastMsg("Sucess");
+
+    SetLastMsg("Unimplemented");
+    return FALSE;
+
+    //ULONG deviceInterfaceListLength = 0;
+    //CONFIGRET cr = CM_Get_Device_Interface_List_Size(
+    //    &deviceInterfaceListLength,
+    //    (LPGUID)&GUID_DEVINTERFACE_IDD_DRIVER_DEVICE,
+    //    NULL,
+    //    CM_GET_DEVICE_INTERFACE_LIST_ALL_DEVICES);
+    //if (cr != CR_SUCCESS)
+    //{
+    //    SetLastMsg("CM_Get_Device_Interface_List_Size failed 0x%x retrieving device interface list size.\n", cr);
+    //    if (g_printMsg)
+    //    {
+    //        printf(g_lastMsg);
+    //    }
+    //    return FALSE;
+    //}
+
+    //if (deviceInterfaceListLength <= 1)
+    //{
+    //    *created = FALSE;
+    //}
+    //else
+    //{
+    //    *created = TRUE;
+    //}
+    //return TRUE;
+}
+
 BOOL DeviceCreate(HSWDEVICE* hSwDevice)
 {
     SetLastMsg("Sucess");
+
+    if (*hSwDevice != NULL)
+    {
+        SetLastMsg("Device handler is not NULL\n");
+        return FALSE;
+    }
+
+    //BOOL created = TRUE;
+    //if (FALSE == DeviceCreated(&created))
+    //{
+    //    return FALSE;
+    //}
+    //if (created == TRUE)
+    //{
+    //    SetLastMsg("Device is created before, please uninstall it first\n");
+    //    if (g_printMsg)
+    //    {
+    //        printf(g_lastMsg);
+    //    }
+    //    return FALSE;
+    //}
 
     // create device
     HANDLE hEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
@@ -94,7 +153,10 @@ BOOL DeviceCreate(HSWDEVICE* hSwDevice)
     {
         auto error = GetLastError();
         SetLastMsg("CreateEvent failed 0x%lx\n", error);
-        printf(g_lastMsg);
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
 
         return FALSE;
     }
@@ -129,7 +191,10 @@ BOOL DeviceCreate(HSWDEVICE* hSwDevice)
     if (FAILED(hr))
     {
         SetLastMsg("SwDeviceCreate failed with 0x%lx\n", hr);
-        printf(g_lastMsg);
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
 
         return FALSE;
     }
@@ -140,7 +205,10 @@ BOOL DeviceCreate(HSWDEVICE* hSwDevice)
     if (waitResult != WAIT_OBJECT_0)
     {
         SetLastMsg("Wait for device creation failed 0x%d\n", waitResult);
-        printf(g_lastMsg);
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
         return FALSE;
     }
     // printf("Device created\n\n");
@@ -151,7 +219,10 @@ VOID DeviceClose(HSWDEVICE hSwDevice)
 {
     SetLastMsg("Sucess");
 
-    SwDeviceClose(hSwDevice);
+    if (hSwDevice != INVALID_HANDLE_VALUE && hSwDevice != NULL)
+    {
+        SwDeviceClose(hSwDevice);
+    }
 }
 
 BOOL MonitorPlugIn(UINT index)
@@ -161,9 +232,6 @@ BOOL MonitorPlugIn(UINT index)
     HANDLE hDevice = DeviceOpen();
     if (hDevice == INVALID_HANDLE_VALUE || hDevice == NULL)
     {
-        auto error = GetLastError();
-        SetLastMsg("CreateFile failed 0x%lx\n", error);
-        printf(g_lastMsg);
         return FALSE;
     }
 
@@ -175,7 +243,10 @@ BOOL MonitorPlugIn(UINT index)
     if (!SUCCEEDED(hr))
     {
         SetLastMsg("CoCreateGuid failed %d\n", hr);
-        printf(g_lastMsg);
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
         ret = FALSE;
     }
     else
@@ -212,9 +283,6 @@ BOOL MonitorPlugOut(UINT index)
     HANDLE hDevice = DeviceOpen();
     if (hDevice == INVALID_HANDLE_VALUE || hDevice == NULL)
     {
-        auto error = GetLastError();
-        SetLastMsg("CreateFile failed 0x%lx\n", error);
-        printf(g_lastMsg);
         return FALSE;
     }
 
@@ -234,7 +302,10 @@ BOOL MonitorPlugOut(UINT index)
     {
         DWORD error = GetLastError();
         SetLastMsg("DeviceIoControl failed 0x%lx\n", error);
-        printf(g_lastMsg);
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
         ret = FALSE;
     }
     else
@@ -281,22 +352,36 @@ GetDevicePath(
         (LPGUID)InterfaceGuid,
         NULL,
         CM_GET_DEVICE_INTERFACE_LIST_ALL_DEVICES);
-    if (cr != CR_SUCCESS) {
-        printf("Error 0x%x retrieving device interface list size.\n", cr);
+    if (cr != CR_SUCCESS)
+    {
+        SetLastMsg("Error GetDevicePath 0x%x retrieving device interface list size.\n", cr);
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
+
         goto clean0;
     }
 
-    if (deviceInterfaceListLength <= 1) {
-        printf("Error: No active device interfaces found."
-            " Is the sample driver loaded?\n");
+    if (deviceInterfaceListLength <= 1)
+    {
+        SetLastMsg("Error: GetDevicePath No active device interfaces found. Is the sample driver loaded?\n");
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
         bRet = FALSE;
         goto clean0;
     }
-    printf("deviceInterfaceListLength %u\n", deviceInterfaceListLength);
 
     deviceInterfaceList = (PTSTR)malloc(deviceInterfaceListLength * sizeof(TCHAR));
-    if (deviceInterfaceList == NULL) {
-        printf("Error allocating memory for device interface list.\n");
+    if (deviceInterfaceList == NULL)
+    {
+        SetLastMsg("Error GetDevicePath allocating memory for device interface list.\n");
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
         bRet = FALSE;
         goto clean0;
     }
@@ -311,8 +396,13 @@ GetDevicePath(
             deviceInterfaceList,
             deviceInterfaceListLength,
             CM_GET_DEVICE_INTERFACE_LIST_PRESENT);
-        if (cr != CR_SUCCESS) {
-            printf("Error 0x%x retrieving device interface list.\n", cr);
+        if (cr != CR_SUCCESS)
+        {
+            SetLastMsg("Error GetDevicePath 0x%x retrieving device interface list.\n", cr);
+            if (g_printMsg)
+            {
+                printf(g_lastMsg);
+            }
             goto clean0;
         }
         _tprintf(_T("get deviceInterfaceList %s\n"), deviceInterfaceList);
@@ -330,17 +420,24 @@ GetDevicePath(
 
     printf("begin copy device path\n");
     hr = StringCchCopy(DevicePath, BufLen, deviceInterfaceList);
-    if (FAILED(hr)) {
-        printf("Error: StringCchCopy failed with HRESULT 0x%x", hr);
+    if (FAILED(hr))
+    {
+        SetLastMsg("Error: GetDevicePath StringCchCopy failed with HRESULT 0x%x", hr);
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
         bRet = FALSE;
         goto clean0;
     }
 
 clean0:
-    if (deviceInterfaceList != NULL) {
+    if (deviceInterfaceList != NULL)
+    {
         free(deviceInterfaceList);
     }
-    if (CR_SUCCESS != cr) {
+    if (CR_SUCCESS != cr)
+    {
         bRet = FALSE;
     }
 
@@ -375,7 +472,11 @@ BOOLEAN GetDevicePath2(
             DIGCF_DEVICEINTERFACE)); // Function class devices.
     if (INVALID_HANDLE_VALUE == hardwareDeviceInfo)
     {
-        printf("Idd device: SetupDiGetClassDevs failed, last error 0x%x\n", GetLastError());
+        SetLastMsg("Idd device: SetupDiGetClassDevs failed, last error 0x%x\n", GetLastError());
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
         return FALSE;
     }
 
@@ -385,8 +486,13 @@ BOOLEAN GetDevicePath2(
         0, // No care about specific PDOs
         InterfaceGuid,
         0, //
-        &deviceInterfaceData)) {
-        printf("Idd device: SetupDiEnumDeviceInterfaces failed, last error 0x%x\n", GetLastError());
+        &deviceInterfaceData))
+    {
+        SetLastMsg("Idd device: SetupDiEnumDeviceInterfaces failed, last error 0x%x\n", GetLastError());
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
         goto Clean0;
     }
 
@@ -394,7 +500,6 @@ BOOLEAN GetDevicePath2(
     // Allocate a function class device data structure to receive the
     // information about this particular device.
     //
-
     SetupDiGetDeviceInterfaceDetail(
         hardwareDeviceInfo,
         &deviceInterfaceData,
@@ -403,14 +508,17 @@ BOOLEAN GetDevicePath2(
         &requiredLength,
         NULL);//not interested in the specific dev-node
 
-    if (ERROR_INSUFFICIENT_BUFFER != GetLastError()) {
-        printf("Idd device: SetupDiGetDeviceInterfaceDetail failed, last error 0x%x\n", GetLastError());
+    if (ERROR_INSUFFICIENT_BUFFER != GetLastError())
+    {
+        SetLastMsg("Idd device: SetupDiGetDeviceInterfaceDetail failed, last error 0x%x\n", GetLastError());
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
         goto Clean0;
     }
 
-
     predictedLength = requiredLength;
-
     deviceInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
         predictedLength);
 
@@ -422,22 +530,31 @@ BOOLEAN GetDevicePath2(
         goto Clean0;
     }
 
-
     if (!SetupDiGetDeviceInterfaceDetail(
         hardwareDeviceInfo,
         &deviceInterfaceData,
         deviceInterfaceDetailData,
         predictedLength,
         &requiredLength,
-        NULL)) {
-        printf("Idd device: SetupDiGetDeviceInterfaceDetail failed, last error 0x%x\n", GetLastError());
+        NULL))
+    {
+        SetLastMsg("Idd device: SetupDiGetDeviceInterfaceDetail failed, last error 0x%x\n", GetLastError());
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
         goto Clean1;
     }
 
     hr = StringCchCopy(DevicePath, BufLen, deviceInterfaceDetailData->DevicePath);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
+        SetLastMsg("Error: StringCchCopy failed with HRESULT 0x%x", hr);
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
         status = FALSE;
-        printf("Error: StringCchCopy failed with HRESULT 0x%x", hr);
         goto Clean1;
     }
 
@@ -454,7 +571,6 @@ HANDLE DeviceOpen()
     const int maxDevPathLen = 256;
     TCHAR devicePath[maxDevPathLen] = { 0 };
     HANDLE hDevice = INVALID_HANDLE_VALUE;
-
     if (GetDevicePath(&GUID_DEVINTERFACE_IDD_DRIVER_DEVICE, devicePath, sizeof(devicePath) / sizeof(devicePath[0])))
     {
         _tprintf(_T("Idd device: try open %s\n"), devicePath);
@@ -468,6 +584,15 @@ HANDLE DeviceOpen()
             0, // No special attributes
             NULL
         );
+        if (hDevice == INVALID_HANDLE_VALUE || hDevice == NULL)
+        {
+            auto error = GetLastError();
+            SetLastMsg("CreateFile failed 0x%lx\n", error);
+            if (g_printMsg)
+            {
+                printf(g_lastMsg);
+            }
+        }
     }
     return hDevice;
 }
@@ -478,4 +603,9 @@ VOID DeviceClose(HANDLE handle)
     {
         CloseHandle(handle);
     }
+}
+
+VOID SetPrintErrMsg(BOOL b)
+{
+    g_printMsg = (b == TRUE);
 }

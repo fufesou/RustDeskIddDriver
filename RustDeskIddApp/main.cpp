@@ -4,26 +4,31 @@
 #include <tchar.h>
 #include "./IddController.h"
 
-int main(int argc, char* argv[])
+int prompt_input()
 {
-    HSWDEVICE hSwDevice = NULL;
-    // Now wait for user to indicate the device should be stopped
+    printf("Prompt\n");
     printf("Press 'x' to exit and destory the software device\n");
-    printf("Press 'u' to install or update driver\n");
+    printf("Press 'i' to install or update driver\n");
     printf("Press 'c' to create device\n");
     printf("Press 'd' to close device\n");
     printf("Press '1','2','3' to plug in monitor (0,1,2)\n");
     printf("Press '4','5','6' to plug out monitor (0,1,2)\n");
+    return _getch();
+}
+
+int main(int argc, char* argv[])
+{
+    HSWDEVICE hSwDevice = NULL;
     bool bExit = false;
     do
     {
-        int key = _getch();
+        int key = prompt_input();
         switch (key)
         {
-        case 'u':
-        case 'U':
+        case 'i':
             printf("Install or update driver begin\n");
             if (FALSE == InstallUpdate(_T("C:\\Users\\cxl3\\Desktop\\Debug\\RustDeskIddDriver\\RustDeskIddDriver.inf")))
+            // if (FALSE == InstallUpdate(_T("D:\\projects\\windows\\IndirectDisplay\\x64\\Debug\\RustDeskIddDriver.inf")))
             {
                 printf(GetLastMsg());
             }
@@ -33,7 +38,6 @@ int main(int argc, char* argv[])
             }
             break;
         case 'c':
-        case 'C':
             printf("Create device begin\n");
             if (hSwDevice != NULL)
             {
@@ -52,7 +56,6 @@ int main(int argc, char* argv[])
             }
             break;
         case 'd':
-        case 'D':
             printf("Close device begin\n");
             DeviceClose(hSwDevice);
             hSwDevice = NULL;
@@ -85,13 +88,13 @@ int main(int argc, char* argv[])
             }
             break;
         case 'x':
-        case 'X':
             bExit = true;
             break;
         default:
             break;
         }
 
+        printf("\n\n");
     }while (!bExit);
 
     if (hSwDevice)
