@@ -25,11 +25,15 @@ CreationCallback(
     _In_opt_ PVOID pContext,
     _In_opt_ PCWSTR pszDeviceInstanceId
 );
+// https://github.com/microsoft/Windows-driver-samples/blob/9f03207ae1e8df83325f067de84494ae55ab5e97/general/DCHU/osrfx2_DCHU_base/osrfx2_DCHU_testapp/testapp.c#L88
+// Not a good way for this device, I don't not why. I'm not familiar with dirver.
 BOOLEAN GetDevicePath(
     _In_ LPCGUID InterfaceGuid,
     _Out_writes_(BufLen) PTCHAR DevicePath,
     _In_ size_t BufLen
 );
+// https://github.com/microsoft/Windows-driver-samples/blob/9f03207ae1e8df83325f067de84494ae55ab5e97/usb/umdf_fx2/exe/testapp.c#L90
+// Works good to check whether device is created before.
 BOOLEAN GetDevicePath2(
     _In_ LPCGUID InterfaceGuid,
     _Out_writes_(BufLen) PTCHAR DevicePath,
@@ -118,17 +122,7 @@ BOOL IsDeviceCreated(BOOL* created)
 {
     SetLastMsg("Sucess");
 
-    HANDLE                              hDevice = INVALID_HANDLE_VALUE;
-    PSP_DEVICE_INTERFACE_DETAIL_DATA    deviceInterfaceDetailData = NULL;
-    ULONG                               predictedLength = 0;
-    ULONG                               requiredLength = 0;
-    ULONG                               bytes;
-    HDEVINFO                            hardwareDeviceInfo;
-    SP_DEVICE_INTERFACE_DATA            deviceInterfaceData;
-    BOOLEAN                             status = FALSE;
-    HRESULT                             hr;
-
-    hardwareDeviceInfo = SetupDiGetClassDevs(
+    HDEVINFO hardwareDeviceInfo = SetupDiGetClassDevs(
         &GUID_DEVINTERFACE_IDD_DRIVER_DEVICE,
         NULL, // Define no enumerator (global)
         NULL, // Define no
@@ -144,36 +138,40 @@ BOOL IsDeviceCreated(BOOL* created)
         return FALSE;
     }
 
+    SP_DEVICE_INTERFACE_DATA            deviceInterfaceData;
     deviceInterfaceData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
 
     BOOL ret = FALSE;
-    if (FALSE == SetupDiEnumDeviceInterfaces(hardwareDeviceInfo,
-        0, // No care about specific PDOs
-        &GUID_DEVINTERFACE_IDD_DRIVER_DEVICE,
-        0, //
-        &deviceInterfaceData))
+    do
     {
+        if (TRUE == SetupDiEnumDeviceInterfaces(hardwareDeviceInfo,
+            0, // No care about specific PDOs
+            &GUID_DEVINTERFACE_IDD_DRIVER_DEVICE,
+            0, //
+            &deviceInterfaceData))
+        {
+            *created = TRUE;
+            ret = TRUE;
+            break;
+        }
+
         DWORD error = GetLastError();
         if (error == ERROR_NO_MORE_ITEMS)
         {
             *created = FALSE;
             ret = TRUE;
+            break;
         }
-        else
+
+        SetLastMsg("Idd device: SetupDiEnumDeviceInterfaces failed, last error 0x%x\n", error);
+        if (g_printMsg)
         {
-            SetLastMsg("Idd device: SetupDiEnumDeviceInterfaces failed, last error 0x%x\n", error);
-            if (g_printMsg)
-            {
-                printf(g_lastMsg);
-            }
-            ret = FALSE;
+            printf(g_lastMsg);
         }
-    }
-    else
-    {
-        *created = TRUE;
-        ret = TRUE;
-    }
+        ret = FALSE;
+        break;
+
+    } while (0);
 
     (VOID)SetupDiDestroyDeviceInfoList(hardwareDeviceInfo);
     return ret;
@@ -517,10 +515,6 @@ BOOLEAN GetDevicePath2(
     SP_DEVICE_INTERFACE_DATA            deviceInterfaceData;
     BOOLEAN                             status = FALSE;
     HRESULT                             hr;
-    //
-    // Open a handle to the device interface information set of all
-    // present toaster bus enumerator interfaces.
-    //
 
     hardwareDeviceInfo = SetupDiGetClassDevs(
         InterfaceGuid,
