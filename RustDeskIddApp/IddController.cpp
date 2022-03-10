@@ -73,7 +73,9 @@ BOOL InstallUpdate(LPCTSTR fullInfPath, PBOOL rebootRequired)
         NULL,
         _T("RustDeskIddDriver"),    // match hardware id in the inf file
         fullInfPath,
-        INSTALLFLAG_FORCE | INSTALLFLAG_NONINTERACTIVE,
+        INSTALLFLAG_FORCE
+            // | INSTALLFLAG_NONINTERACTIVE  // INSTALLFLAG_NONINTERACTIVE may cause error 0xe0000247
+        ,
         rebootRequired
     ))
     {
@@ -280,11 +282,30 @@ VOID DeviceClose(HSWDEVICE hSwDevice)
     }
 }
 
-BOOL MonitorPlugIn(UINT index)
+BOOL MonitorPlugIn(UINT index, INT retries)
 {
     SetLastMsg("Sucess");
 
-    HANDLE hDevice = DeviceOpen();
+    if (retries < 0)
+    {
+        SetLastMsg("invalid tries %d\n", retries);
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
+        return FALSE;
+    }
+
+    HANDLE hDevice = INVALID_HANDLE_VALUE;
+    for (; retries >= 0; --retries)
+    {
+        hDevice = DeviceOpen();
+        if (hDevice != INVALID_HANDLE_VALUE && hDevice != NULL)
+        {
+            break;
+        }
+        Sleep(1000);
+    }
     if (hDevice == INVALID_HANDLE_VALUE || hDevice == NULL)
     {
         return FALSE;
@@ -306,24 +327,28 @@ BOOL MonitorPlugIn(UINT index)
     }
     else
     {
-        if (!DeviceIoControl(
-            hDevice,
-            IOCTL_CHANGER_IDD_PLUG_IN,
-            &plugIn,                    // Ptr to InBuffer
-            sizeof(CtlPlugIn),          // Length of InBuffer
-            NULL,                       // Ptr to OutBuffer
-            0,                          // Length of OutBuffer
-            &junk,                      // BytesReturned
-            0))                         // Ptr to Overlapped structure
+        ret = FALSE;
+        for (; retries >= 0; --retries)
+        {
+            if (TRUE == DeviceIoControl(
+                hDevice,
+                IOCTL_CHANGER_IDD_PLUG_IN,
+                &plugIn,                    // Ptr to InBuffer
+                sizeof(CtlPlugIn),          // Length of InBuffer
+                NULL,                       // Ptr to OutBuffer
+                0,                          // Length of OutBuffer
+                &junk,                      // BytesReturned
+                0))                         // Ptr to Overlapped structure
+            {
+                ret = TRUE;
+                break;
+            }
+        }
+        if (ret == FALSE)
         {
             DWORD error = GetLastError();
             SetLastMsg("DeviceIoControl failed 0x%lx\n", error);
             printf(g_lastMsg);
-            ret = FALSE;
-        }
-        else
-        {
-            ret = TRUE;
         }
     }
 
@@ -354,6 +379,50 @@ BOOL MonitorPlugOut(UINT index)
         0,                      // Length of OutBuffer
         &junk,                  // BytesReturned
         0))                     // Ptr to Overlapped structure
+    {
+        DWORD error = GetLastError();
+        SetLastMsg("DeviceIoControl failed 0x%lx\n", error);
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
+        ret = FALSE;
+    }
+    else
+    {
+        ret = TRUE;
+    }
+
+    DeviceClose(hDevice);
+    return ret;
+}
+
+BOOL MonitorModeUpdate(UINT index, DWORD height, DWORD width, DWORD sync)
+{
+    SetLastMsg("Sucess");
+
+    HANDLE hDevice = DeviceOpen();
+    if (hDevice == INVALID_HANDLE_VALUE || hDevice == NULL)
+    {
+        return FALSE;
+    }
+
+    BOOL ret = FALSE;
+    DWORD junk = 0;
+    CtlMonitorMode monitorMode;
+    monitorMode.ConnectorIndex = index;
+    monitorMode.Height = height;
+    monitorMode.Width = width;
+    monitorMode.Sync = sync;
+    if (!DeviceIoControl(
+        hDevice,
+        IOCTL_CHANGER_IDD_UPDATE_MONITOR_MODE,
+        &monitorMode,               // Ptr to InBuffer
+        sizeof(CtlMonitorMode),     // Length of InBuffer
+        NULL,                       // Ptr to OutBuffer
+        0,                          // Length of OutBuffer
+        &junk,                      // BytesReturned
+        0))                         // Ptr to Overlapped structure
     {
         DWORD error = GetLastError();
         SetLastMsg("DeviceIoControl failed 0x%lx\n", error);
@@ -418,6 +487,7 @@ GetDevicePath(
         goto clean0;
     }
 
+    // CAUTION: BUG here. deviceInterfaceListLength is greater than 1, even device was not created...
     if (deviceInterfaceListLength <= 1)
     {
         SetLastMsg("Error: GetDevicePath No active device interfaces found. Is the sample driver loaded?\n");
@@ -444,7 +514,7 @@ GetDevicePath(
 
     for (int i = 0; i < 3 && _tcslen(deviceInterfaceList) == 0; i++)
     {
-        // why deviceInterfaceList is NULL here, when first installed???
+        // CAUTION: BUG here. deviceInterfaceList is NULL, even device was not created...
         cr = CM_Get_Device_Interface_List(
             (LPGUID)InterfaceGuid,
             NULL,

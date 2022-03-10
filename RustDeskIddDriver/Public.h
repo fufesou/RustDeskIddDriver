@@ -3,8 +3,18 @@
 #include <winioctl.h>
 #include <guiddef.h>
 
-#define IOCTL_CHANGER_IDD_PLUG_IN CTL_CODE(IOCTL_CHANGER_BASE, 0x1001, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
-#define IOCTL_CHANGER_IDD_PLUG_OUT CTL_CODE(IOCTL_CHANGER_BASE, 0x1002, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_CHANGER_IDD_PLUG_IN             CTL_CODE(IOCTL_CHANGER_BASE, \
+                                                       0x1001, \
+                                                       METHOD_BUFFERED, \
+                                                       FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_CHANGER_IDD_PLUG_OUT            CTL_CODE(IOCTL_CHANGER_BASE, \
+                                                       0x1002, \
+                                                       METHOD_BUFFERED, \
+                                                       FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_CHANGER_IDD_UPDATE_MONITOR_MODE CTL_CODE(IOCTL_CHANGER_BASE, \
+                                                       0x1003, \
+                                                       METHOD_BUFFERED, \
+                                                       FILE_READ_ACCESS | FILE_WRITE_ACCESS)
 
 
 #define STATUS_ERROR_ADAPTER_NOT_INIT (3 << 30) + 11
@@ -21,6 +31,13 @@ typedef struct _CtlPlugIn {
 typedef struct _CtlPlugOut {
     UINT ConnectorIndex;
 } CtlPlugOut, *PCtlPlugOut;
+
+typedef struct _CtlMonitorMode {
+    UINT ConnectorIndex;
+    DWORD Height;
+    DWORD Width;
+    DWORD Sync;
+} CtlMonitorMode, *PCtlMonitorMode;
 
 
 #define SYMBOLIC_LINK_NAME L"\\Device\\RustDeskIddDriver"

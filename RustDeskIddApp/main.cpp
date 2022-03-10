@@ -15,6 +15,8 @@ int prompt_input()
     printf("       5. 'd'               5. destroy device\n");
     printf("       6. '1','2','3'       6. plug in monitor 0,1,2\n");
     printf("       7. '4','5','6'       7. plug out monitor 0,1,2\n");
+    printf("       8. 'h','H'           8. monitor 0: h(height-1) H(height+1)\n");
+    printf("       9. 'w','W'           9. monitor 0: w(width-1)  W(width+1) \n");
     return _getch();
 }
 
@@ -22,6 +24,10 @@ int main(int argc, char* argv[])
 {
     HSWDEVICE hSwDevice = NULL;
     bool bExit = false;
+
+    DWORD height = 1920;
+    DWORD width = 1080;
+    DWORD sync = 60;
     do
     {
         int key = prompt_input();
@@ -31,7 +37,7 @@ int main(int argc, char* argv[])
         case 'i':
             printf("Install or update driver begin\n");
             if (FALSE == InstallUpdate(_T("C:\\Users\\cxl3\\Desktop\\Debug\\RustDeskIddDriver\\RustDeskIddDriver.inf"), &rebootRequired))
-            // if (FALSE == InstallUpdate(_T("D:\\projects\\windows\\IndirectDisplay\\x64\\Debug\\RustDeskIddDriver.inf")))
+            //if (FALSE == InstallUpdate(_T("D:\\projects\\windows\\IndirectDisplay\\x64\\Debug\\RustDeskIddDriver\\RustDeskIddDriver.inf"), &rebootRequired))
             {
                 printf(GetLastMsg());
             }
@@ -43,7 +49,7 @@ int main(int argc, char* argv[])
         case 'u':
             printf("Uninstall driver begin\n");
             if (FALSE == Uninstall(_T("C:\\Users\\cxl3\\Desktop\\Debug\\RustDeskIddDriver\\RustDeskIddDriver.inf"), &rebootRequired))
-                // if (FALSE == InstallUpdate(_T("D:\\projects\\windows\\IndirectDisplay\\x64\\Debug\\RustDeskIddDriver.inf")))
+            //if (FALSE == InstallUpdate(_T("D:\\projects\\windows\\IndirectDisplay\\x64\\Debug\\RustDeskIddDriver\\RustDeskIddDriver.inf"), &rebootRequired))
             {
                 printf(GetLastMsg());
             }
@@ -80,13 +86,17 @@ int main(int argc, char* argv[])
         case '2':
         case '3':
             printf("Plug in monitor begin\n");
-            if (FALSE == MonitorPlugIn(key - '1'))
+            if (FALSE == MonitorPlugIn(key - '1', 25))
             {
                 printf(GetLastMsg());
             }
             else
             {
                 printf("Plug in monitor done\n");
+                if (FALSE == MonitorModeUpdate(key - '1', height, width, sync))
+                {
+                    printf(GetLastMsg());
+                }
             }
             break;
         case '4':
@@ -100,6 +110,54 @@ int main(int argc, char* argv[])
             else
             {
                 printf("Plug out monitor done\n");
+            }
+            break;
+        case 'h':
+            printf("Height decrese begin\n");
+            // demo no need to care about height <= 0
+            if (FALSE == MonitorModeUpdate(0, --height, width, sync))
+            {
+                printf(GetLastMsg());
+            }
+            else
+            {
+                printf("Height decrese done\n");
+            }
+            break;
+        case 'H':
+            printf("Height increse begin\n");
+            // demo no need to care about height too big
+            if (FALSE == MonitorModeUpdate(0, ++height, width, sync))
+            {
+                printf(GetLastMsg());
+            }
+            else
+            {
+                printf("Height increse done\n");
+            }
+            break;
+        case 'w':
+            printf("Width decrese begin\n");
+            // demo no need to care about width <= 0
+            if (FALSE == MonitorModeUpdate(0, height, --width, sync))
+            {
+                printf(GetLastMsg());
+            }
+            else
+            {
+                printf("Width decrese done\n");
+            }
+            break;
+        case 'W':
+            printf("Width increase begin\n");
+            // demo no need to care about width too big
+            if (FALSE == MonitorModeUpdate(0, height, ++width, sync))
+            {
+                printf(GetLastMsg());
+            }
+            else
+            {
+                printf("Width increase done\n");
             }
             break;
         case 'x':

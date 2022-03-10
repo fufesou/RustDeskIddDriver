@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "Trace.h"
+#include "Public.h"
 
 namespace Microsoft
 {
@@ -105,8 +106,10 @@ namespace Microsoft
                 m_AdapterInitStatus = Status;
             }
 
-            NTSTATUS PlugInMonitor(UINT ConnectorIndex, GUID ContainerID);
-            NTSTATUS PlugOutMonitor(UINT ConnectorIndex);
+            NTSTATUS PlugInMonitor(PCtlPlugIn Param);
+            NTSTATUS PlugOutMonitor(PCtlPlugOut Param);
+
+            NTSTATUS UpdateMonitorModes(PCtlMonitorMode Param);
 
             static UINT GetMaxMonitorCount()
             {

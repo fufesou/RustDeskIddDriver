@@ -763,8 +763,10 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
     }
 }
 
-NTSTATUS IndirectDeviceContext::PlugInMonitor(UINT ConnectorIndex, GUID ContainerID)
+NTSTATUS IndirectDeviceContext::PlugInMonitor(PCtlPlugIn Param)
 {
+    UINT ConnectorIndex = Param->ConnectorIndex;
+    GUID ContainerID = Param->ContainerId;
     TraceEvents(TRACE_LEVEL_INFORMATION,
         TRACE_DEVICE,
         "%!FUNC! begin plug in monitor %u",
@@ -825,20 +827,19 @@ NTSTATUS IndirectDeviceContext::PlugInMonitor(UINT ConnectorIndex, GUID Containe
             TRACE_DEVICE,
             "%!FUNC! create monitor done");
 
-        // Create a new monitor context object and attach it to the Idd monitor object
-        auto* pMonitorContextWrapper = WdfObjectGet_IndirectMonitorContextWrapper(MonitorCreateOut.MonitorObject);
-        pMonitorContextWrapper->pContext = new IndirectMonitorContext(MonitorCreateOut.MonitorObject);
-
         // Tell the OS that the monitor has been plugged in
         IDARG_OUT_MONITORARRIVAL ArrivalOut;
         Status = IddCxMonitorArrival(MonitorCreateOut.MonitorObject, &ArrivalOut);
         if (NT_SUCCESS(Status))
         {
-            m_Monitors[ConnectorIndex] = MonitorCreateOut.MonitorObject;
-
             TraceEvents(TRACE_LEVEL_INFORMATION,
                 TRACE_DEVICE,
                 "%!FUNC! tell the OS that the monitor has been plugged in done");
+
+            // Create a new monitor context object and attach it to the Idd monitor object
+            auto* pMonitorContextWrapper = WdfObjectGet_IndirectMonitorContextWrapper(MonitorCreateOut.MonitorObject);
+            pMonitorContextWrapper->pContext = new IndirectMonitorContext(MonitorCreateOut.MonitorObject);
+            m_Monitors[ConnectorIndex] = MonitorCreateOut.MonitorObject;
         }
         else
         {
@@ -846,6 +847,7 @@ NTSTATUS IndirectDeviceContext::PlugInMonitor(UINT ConnectorIndex, GUID Containe
                 TRACE_DEVICE,
                 "%!FUNC! cannot tell the OS that the monitor has been plugged in %!STATUS!",
                 Status);
+            (VOID)IddCxMonitorDeparture(MonitorCreateOut.MonitorObject);
         }
     }
     else
@@ -858,8 +860,9 @@ NTSTATUS IndirectDeviceContext::PlugInMonitor(UINT ConnectorIndex, GUID Containe
     return Status;
 }
 
-NTSTATUS IndirectDeviceContext::PlugOutMonitor(UINT ConnectorIndex)
+NTSTATUS IndirectDeviceContext::PlugOutMonitor(PCtlPlugOut Param)
 {
+    UINT ConnectorIndex = Param->ConnectorIndex;
     TraceEvents(TRACE_LEVEL_INFORMATION,
         TRACE_DEVICE,
         "%!FUNC! begin plug out monitor %u",
@@ -887,6 +890,29 @@ NTSTATUS IndirectDeviceContext::PlugOutMonitor(UINT ConnectorIndex)
             Status);
     }
     return Status;
+}
+
+NTSTATUS IndirectDeviceContext::UpdateMonitorModes(PCtlMonitorMode Param)
+{
+    // Unimplemented
+    UINT ConnectorIndex = Param->ConnectorIndex;
+    DWORD Height = Param->Height;
+    DWORD Width = Param->Width;
+    DWORD Sync = Param->Sync;
+
+    TraceEvents(TRACE_LEVEL_INFORMATION,
+        TRACE_DEVICE,
+        "%!FUNC! begin update monitor mode %u",
+        ConnectorIndex);
+
+    if (m_Monitors[ConnectorIndex] == NULL)
+    {
+        return STATUS_ERROR_MONITOR_NOT_EXISTS;
+    }
+
+    IDDCX_TARGET_MODE TargetMode = CreateIddCxTargetMode(Height, Width, Sync);
+    IDARG_IN_UPDATEMODES UpdateModes{ IDDCX_UPDATE_REASON_OTHER, 1, &TargetMode };
+    return IddCxMonitorUpdateModes(m_Monitors[ConnectorIndex], &UpdateModes);
 }
 
 IndirectMonitorContext::IndirectMonitorContext(_In_ IDDCX_MONITOR Monitor) :
@@ -939,6 +965,10 @@ _Use_decl_annotations_
 VOID
 IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBufferLength, size_t InputBufferLength, ULONG IoControlCode)
 {
+    TraceEvents(TRACE_LEVEL_INFORMATION,
+        TRACE_DEVICE,
+        "%!FUNC! receive io control code %ul\n", IoControlCode);
+
     UNREFERENCED_PARAMETER(Request);
     UNREFERENCED_PARAMETER(OutputBufferLength);
     UNREFERENCED_PARAMETER(InputBufferLength);
@@ -948,10 +978,6 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
     PVOID  Buffer;
     size_t BufSize;
     auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(Device);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION,
-        TRACE_DEVICE,
-        "%!FUNC! receive io control code %ul\n", IoControlCode);
 
     switch (IoControlCode)
     {
@@ -966,7 +992,7 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
             break;
         }
         pCtlPlugIn = (PCtlPlugIn)Buffer;
-        Status = pContext->pContext->PlugInMonitor(pCtlPlugIn->ConnectorIndex, pCtlPlugIn->ContainerId);
+        Status = pContext->pContext->PlugInMonitor(pCtlPlugIn);
         break;
     case IOCTL_CHANGER_IDD_PLUG_OUT:
         PCtlPlugOut pCtlPlugOut;
@@ -980,7 +1006,21 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
             break;
         }
         pCtlPlugOut = (PCtlPlugOut)Buffer;
-        Status = pContext->pContext->PlugOutMonitor(pCtlPlugOut->ConnectorIndex);
+        Status = pContext->pContext->PlugOutMonitor(pCtlPlugOut);
+        break;
+    case IOCTL_CHANGER_IDD_UPDATE_MONITOR_MODE:
+        PCtlMonitorMode pMonitorMode;
+        Status = WdfRequestRetrieveInputBuffer(Request, sizeof(CtlMonitorMode), &Buffer, &BufSize);
+        if (!NT_SUCCESS(Status))
+        {
+            TraceEvents(TRACE_LEVEL_ERROR,
+                TRACE_DEVICE,
+                "%!FUNC! cannot retrieve input buffer %!STATUS!",
+                Status);
+            break;
+        }
+        pMonitorMode = (PCtlMonitorMode)Buffer;
+        Status = pContext->pContext->UpdateMonitorModes(pMonitorMode);
         break;
     default:
         TraceEvents(TRACE_LEVEL_ERROR,
@@ -999,9 +1039,12 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
     WdfRequestComplete(Request, Status);
 }
 
+// TODO: This function may not be called, why?
 _Use_decl_annotations_
 NTSTATUS IddRustDeskAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG_IN_ADAPTER_INIT_FINISHED* pInArgs)
 {
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "%!FUNC! called");
+
     // This is called when the OS has finished setting up the adapter for use by the IddCx driver. It's now possible
     // to report attached monitors.
 
@@ -1033,6 +1076,8 @@ NTSTATUS IddRustDeskAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG
 _Use_decl_annotations_
 NTSTATUS IddRustDeskAdapterCommitModes(IDDCX_ADAPTER AdapterObject, const IDARG_IN_COMMITMODES* pInArgs)
 {
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "%!FUNC! called");
+
     UNREFERENCED_PARAMETER(AdapterObject);
     UNREFERENCED_PARAMETER(pInArgs);
 
@@ -1050,6 +1095,8 @@ NTSTATUS IddRustDeskAdapterCommitModes(IDDCX_ADAPTER AdapterObject, const IDARG_
 _Use_decl_annotations_
 NTSTATUS IddRustDeskParseMonitorDescription(const IDARG_IN_PARSEMONITORDESCRIPTION* pInArgs, IDARG_OUT_PARSEMONITORDESCRIPTION* pOutArgs)
 {
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "%!FUNC! called");
+
     // ==============================
     // TODO: In a real driver, this function would be called to generate monitor modes for an EDID by parsing it. In
     // this sample driver, we hard-code the EDID, so this function can generate known modes.
@@ -1105,6 +1152,8 @@ NTSTATUS IddRustDeskParseMonitorDescription(const IDARG_IN_PARSEMONITORDESCRIPTI
 _Use_decl_annotations_
 NTSTATUS IddRustDeskMonitorGetDefaultModes(IDDCX_MONITOR MonitorObject, const IDARG_IN_GETDEFAULTDESCRIPTIONMODES* pInArgs, IDARG_OUT_GETDEFAULTDESCRIPTIONMODES* pOutArgs)
 {
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "%!FUNC! called");
+
     UNREFERENCED_PARAMETER(MonitorObject);
 
     // ==============================
@@ -1140,6 +1189,8 @@ NTSTATUS IddRustDeskMonitorGetDefaultModes(IDDCX_MONITOR MonitorObject, const ID
 _Use_decl_annotations_
 NTSTATUS IddRustDeskMonitorQueryModes(IDDCX_MONITOR MonitorObject, const IDARG_IN_QUERYTARGETMODES* pInArgs, IDARG_OUT_QUERYTARGETMODES* pOutArgs)
 {
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "%!FUNC! called");
+
     UNREFERENCED_PARAMETER(MonitorObject);
 
     vector<IDDCX_TARGET_MODE> TargetModes;
@@ -1148,16 +1199,16 @@ NTSTATUS IddRustDeskMonitorQueryModes(IDDCX_MONITOR MonitorObject, const IDARG_I
     // monitor's descriptor and instead are based on the static processing capability of the device. The OS will
     // report the available set of modes for a given output as the intersection of monitor modes with target modes.
 
-    TargetModes.push_back(CreateIddCxTargetMode(3840, 2160, 60));
-    TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 144));
-    TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 90));
-    TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 60));
-    TargetModes.push_back(CreateIddCxTargetMode(1920, 1080, 144));
-    TargetModes.push_back(CreateIddCxTargetMode(1920, 1080, 90));
-    TargetModes.push_back(CreateIddCxTargetMode(1920, 1080, 60));
-    TargetModes.push_back(CreateIddCxTargetMode(1600,  900, 60));
-    TargetModes.push_back(CreateIddCxTargetMode(1024,  768, 75));
-    TargetModes.push_back(CreateIddCxTargetMode(1024,  768, 60));
+    //TargetModes.push_back(CreateIddCxTargetMode(3840, 2160, 60));
+    //TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 144));
+    //TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 90));
+    //TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 60));
+    //TargetModes.push_back(CreateIddCxTargetMode(1920, 1080, 144));
+    //TargetModes.push_back(CreateIddCxTargetMode(1920, 1080, 90));
+    //TargetModes.push_back(CreateIddCxTargetMode(1920, 1080, 60));
+    //TargetModes.push_back(CreateIddCxTargetMode(1600,  900, 60));
+    //TargetModes.push_back(CreateIddCxTargetMode(1024,  768, 75));
+    //TargetModes.push_back(CreateIddCxTargetMode(1024,  768, 60));
 
     pOutArgs->TargetModeBufferOutputCount = (UINT) TargetModes.size();
 
@@ -1172,6 +1223,8 @@ NTSTATUS IddRustDeskMonitorQueryModes(IDDCX_MONITOR MonitorObject, const IDARG_I
 _Use_decl_annotations_
 NTSTATUS IddRustDeskMonitorAssignSwapChain(IDDCX_MONITOR MonitorObject, const IDARG_IN_SETSWAPCHAIN* pInArgs)
 {
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "%!FUNC! called");
+
     auto* pMonitorContextWrapper = WdfObjectGet_IndirectMonitorContextWrapper(MonitorObject);
     pMonitorContextWrapper->pContext->AssignSwapChain(pInArgs->hSwapChain, pInArgs->RenderAdapterLuid, pInArgs->hNextSurfaceAvailable);
     return STATUS_SUCCESS;
@@ -1180,6 +1233,8 @@ NTSTATUS IddRustDeskMonitorAssignSwapChain(IDDCX_MONITOR MonitorObject, const ID
 _Use_decl_annotations_
 NTSTATUS IddRustDeskMonitorUnassignSwapChain(IDDCX_MONITOR MonitorObject)
 {
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "%!FUNC! called");
+
     auto* pMonitorContextWrapper = WdfObjectGet_IndirectMonitorContextWrapper(MonitorObject);
     pMonitorContextWrapper->pContext->UnassignSwapChain();
     return STATUS_SUCCESS;

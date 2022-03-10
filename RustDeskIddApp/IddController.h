@@ -66,15 +66,20 @@ VOID DeviceClose(HSWDEVICE hSwDevice);
  * @brief Plug in monitor.
  *
  * @param index [in] Monitor index, should be 0, 1, 2.
+ * @param retries [in] Retry times. Retry 1 time / sec. 25~30 seconds may be good choices.
+ *                     -1 is invalid.
+ *                     0 means doing once and no retries.
+ *                     1 means doing once and retry one time...
  *
  * @return TRUE/FALSE. If FALSE returned, error message can be retrieved by GetLastMsg()
  * 
  * @see GetLastMsg#GetLastMsg
  * 
- * @todo Plug in and set resolution.
+ * @remark  Plug in monitor may fail if device is created in a very short time.
+ *          System need some time to prepare the device.
  *
  */
-BOOL MonitorPlugIn(UINT index);
+BOOL MonitorPlugIn(UINT index, INT retries);
 
 /**
  * @brief Plug out monitor.
@@ -87,6 +92,21 @@ BOOL MonitorPlugIn(UINT index);
  *
  */
 BOOL MonitorPlugOut(UINT index);
+
+/**
+ * @brief Update monitor mode.
+ *
+ * @param index  [in] Monitor index, should be 0, 1, 2.
+ * @param height [in] 
+ * @param width  [in] 
+ * @param sync   [in] 
+ *
+ * @return TRUE/FALSE. If FALSE returned, error message can be retrieved by GetLastMsg()
+ *
+ * @see GetLastMsg#GetLastMsg
+ *
+ */
+BOOL MonitorModeUpdate(UINT index, DWORD height, DWORD width, DWORD sync);
 
 /**
  * @brief Get last error message.
