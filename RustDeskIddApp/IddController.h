@@ -7,25 +7,38 @@
  * @brief Install or Update RustDeskIddDriver.
  *
  * @param fullInfPath [in] Full path of the driver inf file.
+ * @param rebootRequired [out] Indicates whether a restart is required.
  *
  * @return TRUE/FALSE. If FALSE returned, error message can be retrieved by GetLastMsg()
  * 
  * @see GetLastMsg#GetLastMsg
  */
-BOOL InstallUpdate(LPCTSTR fullInfPath);
+BOOL InstallUpdate(LPCTSTR fullInfPath, PBOOL rebootRequired);
+
+/**
+ * @brief Uninstall RustDeskIddDriver.
+ *
+ * @param fullInfPath [in] Full path of the driver inf file.
+ * @param rebootRequired [out] Indicates whether a restart is required.
+ *
+ * @return TRUE/FALSE. If FALSE returned, error message can be retrieved by GetLastMsg()
+ *
+ * @see GetLastMsg#GetLastMsg
+ */
+BOOL Uninstall(LPCTSTR fullInfPath, PBOOL rebootRequired);
 
 /**
  * @brief Check if RustDeskIddDriver device is created before.
  *        The driver device(adapter) should be single instance.
  * 
- * @param created [out] Indicate whether device is created before.
+ * @param created [out] Indicates whether the device is created before.
  *
  * @return TRUE/FALSE. If FALSE returned, error message can be retrieved by GetLastMsg()
  * 
  * @see GetLastMsg#GetLastMsg
  *
  */
-BOOL DeviceCreated(BOOL* created);
+BOOL IsDeviceCreated(BOOL* created);
 
 /**
  * @brief Create device.

@@ -1013,10 +1013,10 @@ NTSTATUS IddRustDeskAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG
             TRACE_DEVICE,
             "%!FUNC! adapter init finished success");
 
-/*        for (DWORD i = 0; i < IDD_SAMPLE_MONITOR_COUNT; i++)
-        {
-            pDeviceContextWrapper->pContext->FinishInit(i);
-        }    */   
+        //for (DWORD i = 0; i < IDD_SAMPLE_MONITOR_COUNT; i++)
+        //{
+        //    pDeviceContextWrapper->pContext->FinishInit(i);
+        //}
     }
     else
     {

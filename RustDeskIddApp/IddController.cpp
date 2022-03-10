@@ -60,7 +60,7 @@ const char* GetLastMsg()
     return g_lastMsg;
 }
 
-BOOL InstallUpdate(LPCTSTR fullInfPath)
+BOOL InstallUpdate(LPCTSTR fullInfPath, PBOOL rebootRequired)
 {
     SetLastMsg("Sucess");
 
@@ -69,14 +69,14 @@ BOOL InstallUpdate(LPCTSTR fullInfPath)
         NULL,
         _T("RustDeskIddDriver"),    // match hardware id in the inf file
         fullInfPath,
-        INSTALLFLAG_FORCE,
-        NULL
+        INSTALLFLAG_FORCE | INSTALLFLAG_NONINTERACTIVE,
+        rebootRequired
     ))
     {
-        auto error = GetLastError();
+        DWORD error = GetLastError();
         if (error != 0)
         {
-            SetLastMsg("UpdateDriverForPlugAndPlayDevicesW failed, last error 0x%x\n", error);
+            SetLastMsg("UpdateDriverForPlugAndPlayDevices failed, last error 0x%x\n", error);
             if (g_printMsg)
             {
                 printf(g_lastMsg);
@@ -88,38 +88,95 @@ BOOL InstallUpdate(LPCTSTR fullInfPath)
     return TRUE;
 }
 
-BOOL DeviceCreated(BOOL* created)
+BOOL Uninstall(LPCTSTR fullInfPath, PBOOL rebootRequired)
 {
     SetLastMsg("Sucess");
 
-    SetLastMsg("Unimplemented");
-    return FALSE;
+    if (FALSE == DiUninstallDriver(
+        NULL,
+        fullInfPath,
+        0,
+        rebootRequired
+    ))
+    {
+        DWORD error = GetLastError();
+        if (error != 0)
+        {
+            SetLastMsg("DiUninstallDriver failed, last error 0x%x\n", error);
+            if (g_printMsg)
+            {
+                printf(g_lastMsg);
+            }
+            return FALSE;
+        }
+    }
 
-    //ULONG deviceInterfaceListLength = 0;
-    //CONFIGRET cr = CM_Get_Device_Interface_List_Size(
-    //    &deviceInterfaceListLength,
-    //    (LPGUID)&GUID_DEVINTERFACE_IDD_DRIVER_DEVICE,
-    //    NULL,
-    //    CM_GET_DEVICE_INTERFACE_LIST_ALL_DEVICES);
-    //if (cr != CR_SUCCESS)
-    //{
-    //    SetLastMsg("CM_Get_Device_Interface_List_Size failed 0x%x retrieving device interface list size.\n", cr);
-    //    if (g_printMsg)
-    //    {
-    //        printf(g_lastMsg);
-    //    }
-    //    return FALSE;
-    //}
+    return TRUE;
+}
 
-    //if (deviceInterfaceListLength <= 1)
-    //{
-    //    *created = FALSE;
-    //}
-    //else
-    //{
-    //    *created = TRUE;
-    //}
-    //return TRUE;
+BOOL IsDeviceCreated(BOOL* created)
+{
+    SetLastMsg("Sucess");
+
+    HANDLE                              hDevice = INVALID_HANDLE_VALUE;
+    PSP_DEVICE_INTERFACE_DETAIL_DATA    deviceInterfaceDetailData = NULL;
+    ULONG                               predictedLength = 0;
+    ULONG                               requiredLength = 0;
+    ULONG                               bytes;
+    HDEVINFO                            hardwareDeviceInfo;
+    SP_DEVICE_INTERFACE_DATA            deviceInterfaceData;
+    BOOLEAN                             status = FALSE;
+    HRESULT                             hr;
+
+    hardwareDeviceInfo = SetupDiGetClassDevs(
+        &GUID_DEVINTERFACE_IDD_DRIVER_DEVICE,
+        NULL, // Define no enumerator (global)
+        NULL, // Define no
+        (DIGCF_PRESENT | // Only Devices present
+            DIGCF_DEVICEINTERFACE)); // Function class devices.
+    if (INVALID_HANDLE_VALUE == hardwareDeviceInfo)
+    {
+        SetLastMsg("Idd device: SetupDiGetClassDevs failed, last error 0x%x\n", GetLastError());
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
+        return FALSE;
+    }
+
+    deviceInterfaceData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
+
+    BOOL ret = FALSE;
+    if (FALSE == SetupDiEnumDeviceInterfaces(hardwareDeviceInfo,
+        0, // No care about specific PDOs
+        &GUID_DEVINTERFACE_IDD_DRIVER_DEVICE,
+        0, //
+        &deviceInterfaceData))
+    {
+        DWORD error = GetLastError();
+        if (error == ERROR_NO_MORE_ITEMS)
+        {
+            *created = FALSE;
+            ret = TRUE;
+        }
+        else
+        {
+            SetLastMsg("Idd device: SetupDiEnumDeviceInterfaces failed, last error 0x%x\n", error);
+            if (g_printMsg)
+            {
+                printf(g_lastMsg);
+            }
+            ret = FALSE;
+        }
+    }
+    else
+    {
+        *created = TRUE;
+        ret = TRUE;
+    }
+
+    (VOID)SetupDiDestroyDeviceInfoList(hardwareDeviceInfo);
+    return ret;
 }
 
 BOOL DeviceCreate(HSWDEVICE* hSwDevice)
@@ -132,26 +189,26 @@ BOOL DeviceCreate(HSWDEVICE* hSwDevice)
         return FALSE;
     }
 
-    //BOOL created = TRUE;
-    //if (FALSE == DeviceCreated(&created))
-    //{
-    //    return FALSE;
-    //}
-    //if (created == TRUE)
-    //{
-    //    SetLastMsg("Device is created before, please uninstall it first\n");
-    //    if (g_printMsg)
-    //    {
-    //        printf(g_lastMsg);
-    //    }
-    //    return FALSE;
-    //}
+    BOOL created = TRUE;
+    if (FALSE == IsDeviceCreated(&created))
+    {
+        return FALSE;
+    }
+    if (created == TRUE)
+    {
+        SetLastMsg("Device is created before, please uninstall it first\n");
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
+        return FALSE;
+    }
 
     // create device
     HANDLE hEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if (hEvent == INVALID_HANDLE_VALUE || hEvent == NULL)
     {
-        auto error = GetLastError();
+        DWORD error = GetLastError();
         SetLastMsg("CreateEvent failed 0x%lx\n", error);
         if (g_printMsg)
         {
@@ -406,6 +463,7 @@ GetDevicePath(
             goto clean0;
         }
         _tprintf(_T("get deviceInterfaceList %s\n"), deviceInterfaceList);
+        Sleep(1000);
     }
 
     nextInterface = deviceInterfaceList + _tcslen(deviceInterfaceList) + 1;
@@ -442,7 +500,7 @@ clean0:
     }
 
     return bRet;
-    }
+}
 
 BOOLEAN GetDevicePath2(
     _In_ LPCGUID InterfaceGuid,
@@ -519,14 +577,24 @@ BOOLEAN GetDevicePath2(
     }
 
     predictedLength = requiredLength;
-    deviceInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
-        predictedLength);
+    deviceInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA)HeapAlloc(
+        GetProcessHeap(),
+        HEAP_ZERO_MEMORY,
+        predictedLength
+    );
 
-    if (deviceInterfaceDetailData) {
+    if (deviceInterfaceDetailData)
+    {
         deviceInterfaceDetailData->cbSize =
             sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
     }
-    else {
+    else
+    {
+        SetLastMsg("Idd device: HeapAlloc failed, last error 0x%x\n", GetLastError());
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
         goto Clean0;
     }
 
@@ -557,22 +625,45 @@ BOOLEAN GetDevicePath2(
         status = FALSE;
         goto Clean1;
     }
+    else
+    {
+        status = TRUE;
+    }
 
 Clean1:
-    HeapFree(GetProcessHeap(), 0, deviceInterfaceDetailData);
+    (VOID)HeapFree(GetProcessHeap(), 0, deviceInterfaceDetailData);
 Clean0:
-    SetupDiDestroyDeviceInfoList(hardwareDeviceInfo);
+    (VOID)SetupDiDestroyDeviceInfoList(hardwareDeviceInfo);
     return status;
 }
 
 // https://stackoverflow.com/questions/67164846/createfile-fails-unless-i-disable-enable-my-device
 HANDLE DeviceOpen()
 {
+    SetLastMsg("Sucess");
+
     const int maxDevPathLen = 256;
     TCHAR devicePath[maxDevPathLen] = { 0 };
     HANDLE hDevice = INVALID_HANDLE_VALUE;
-    if (GetDevicePath(&GUID_DEVINTERFACE_IDD_DRIVER_DEVICE, devicePath, sizeof(devicePath) / sizeof(devicePath[0])))
+    do
     {
+        if (FALSE == GetDevicePath2(
+            &GUID_DEVINTERFACE_IDD_DRIVER_DEVICE,
+            devicePath,
+            sizeof(devicePath) / sizeof(devicePath[0])))
+        {
+            break;
+        }
+        if (_tcslen(devicePath) == 0)
+        {
+            SetLastMsg("GetDevicePath got empty device path\n");
+            if (g_printMsg)
+            {
+                printf(g_lastMsg);
+            }
+            break;
+        }
+
         _tprintf(_T("Idd device: try open %s\n"), devicePath);
         hDevice = CreateFile(
             devicePath,
@@ -586,14 +677,15 @@ HANDLE DeviceOpen()
         );
         if (hDevice == INVALID_HANDLE_VALUE || hDevice == NULL)
         {
-            auto error = GetLastError();
+            DWORD error = GetLastError();
             SetLastMsg("CreateFile failed 0x%lx\n", error);
             if (g_printMsg)
             {
                 printf(g_lastMsg);
             }
         }
-    }
+    } while (0);
+
     return hDevice;
 }
 

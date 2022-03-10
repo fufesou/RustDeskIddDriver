@@ -2,17 +2,19 @@
 #include <stdlib.h>
 #include <conio.h>
 #include <tchar.h>
+
 #include "./IddController.h"
 
 int prompt_input()
 {
-    printf("Prompt\n");
-    printf("Press 'x' to exit and destory the software device\n");
-    printf("Press 'i' to install or update driver\n");
-    printf("Press 'c' to create device\n");
-    printf("Press 'd' to close device\n");
-    printf("Press '1','2','3' to plug in monitor (0,1,2)\n");
-    printf("Press '4','5','6' to plug out monitor (0,1,2)\n");
+    printf("Press  key                  execute:\n");
+    printf("       1. 'x'               1. exit\n");
+    printf("       2. 'i'               2. install or update driver\n");
+    printf("       3. 'u'               3. uninstall driver\n");
+    printf("       4. 'c'               4. create device\n");
+    printf("       5. 'd'               5. destroy device\n");
+    printf("       6. '1','2','3'       6. plug in monitor 0,1,2\n");
+    printf("       7. '4','5','6'       7. plug out monitor 0,1,2\n");
     return _getch();
 }
 
@@ -23,18 +25,31 @@ int main(int argc, char* argv[])
     do
     {
         int key = prompt_input();
+        BOOL rebootRequired = FALSE;
         switch (key)
         {
         case 'i':
             printf("Install or update driver begin\n");
-            if (FALSE == InstallUpdate(_T("C:\\Users\\cxl3\\Desktop\\Debug\\RustDeskIddDriver\\RustDeskIddDriver.inf")))
+            if (FALSE == InstallUpdate(_T("C:\\Users\\cxl3\\Desktop\\Debug\\RustDeskIddDriver\\RustDeskIddDriver.inf"), &rebootRequired))
             // if (FALSE == InstallUpdate(_T("D:\\projects\\windows\\IndirectDisplay\\x64\\Debug\\RustDeskIddDriver.inf")))
             {
                 printf(GetLastMsg());
             }
             else
             {
-                printf("Install or update driver done\n");
+                printf("Install or update driver done, reboot is %s required\n", (rebootRequired == TRUE ? "" : "not"));
+            }
+            break;
+        case 'u':
+            printf("Uninstall driver begin\n");
+            if (FALSE == Uninstall(_T("C:\\Users\\cxl3\\Desktop\\Debug\\RustDeskIddDriver\\RustDeskIddDriver.inf"), &rebootRequired))
+                // if (FALSE == InstallUpdate(_T("D:\\projects\\windows\\IndirectDisplay\\x64\\Debug\\RustDeskIddDriver.inf")))
+            {
+                printf(GetLastMsg());
+            }
+            else
+            {
+                printf("Uninstall driver done, reboot is %s required\n", (rebootRequired == TRUE ? "" : "not"));
             }
             break;
         case 'c':
