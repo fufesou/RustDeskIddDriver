@@ -21,6 +21,8 @@ BOOL InstallUpdate(LPCTSTR fullInfPath);
  * @param created [out] Indicate whether device is created before.
  *
  * @return TRUE/FALSE. If FALSE returned, error message can be retrieved by GetLastMsg()
+ * 
+ * @see GetLastMsg#GetLastMsg
  *
  */
 BOOL DeviceCreated(BOOL* created);
@@ -33,6 +35,8 @@ BOOL DeviceCreated(BOOL* created);
  * @param hSwDevice [out] Handler of software device, used by SwDeviceCreate(). Should be **NULL**.
  *
  * @return TRUE/FALSE. If FALSE returned, error message can be retrieved by GetLastMsg()
+ * 
+ * @see GetLastMsg#GetLastMsg
  *
  */
 BOOL DeviceCreate(HSWDEVICE* hSwDevice);
@@ -52,6 +56,8 @@ VOID DeviceClose(HSWDEVICE hSwDevice);
  *
  * @return TRUE/FALSE. If FALSE returned, error message can be retrieved by GetLastMsg()
  * 
+ * @see GetLastMsg#GetLastMsg
+ * 
  * @todo Plug in and set resolution.
  *
  */
@@ -63,6 +69,8 @@ BOOL MonitorPlugIn(UINT index);
  * @param index [in] Monitor index, should be 0, 1, 2.
  *
  * @return TRUE/FALSE. If FALSE returned, error message can be retrieved by GetLastMsg()
+ * 
+ * @see GetLastMsg#GetLastMsg
  *
  */
 BOOL MonitorPlugOut(UINT index);

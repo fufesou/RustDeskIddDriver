@@ -108,8 +108,13 @@ namespace Microsoft
             NTSTATUS PlugInMonitor(UINT ConnectorIndex, GUID ContainerID);
             NTSTATUS PlugOutMonitor(UINT ConnectorIndex);
 
+            static UINT GetMaxMonitorCount()
+            {
+                return m_sMaxMonitorCount;
+            }
+
         protected:
-            static constexpr UINT m_sMaxMonitorCount = 4;
+            static constexpr UINT m_sMaxMonitorCount = 3;
             IDDCX_MONITOR m_Monitors[m_sMaxMonitorCount];
 
             NTSTATUS m_AdapterInitStatus;

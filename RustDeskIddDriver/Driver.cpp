@@ -51,6 +51,7 @@ static const struct IndirectSampleMonitor::SampleMonitorMode s_SampleDefaultMode
 };
 
 // FOR SAMPLE PURPOSES ONLY, Static info about monitors that will be reported to OS
+// TODO: Add more monitors, and adjust default resolutions.
 static const struct IndirectSampleMonitor s_SampleMonitors[] =
 {
     // Modified EDID from Dell S2719DGF
@@ -632,7 +633,7 @@ void IndirectDeviceContext::InitAdapter()
     AdapterCaps.Size = sizeof(AdapterCaps);
 
     // Declare basic feature support for the adapter (required)
-    AdapterCaps.MaxMonitorsSupported = IDD_SAMPLE_MONITOR_COUNT;
+    AdapterCaps.MaxMonitorsSupported = Microsoft::IndirectDisp::IndirectDeviceContext::GetMaxMonitorCount();
     AdapterCaps.EndPointDiagnostics.Size = sizeof(AdapterCaps.EndPointDiagnostics);
     AdapterCaps.EndPointDiagnostics.GammaSupport = IDDCX_FEATURE_IMPLEMENTATION_NONE;
     AdapterCaps.EndPointDiagnostics.TransmissionType = IDDCX_TRANSMISSION_TYPE_WIRED_OTHER;
@@ -796,7 +797,7 @@ NTSTATUS IndirectDeviceContext::PlugInMonitor(UINT ConnectorIndex, GUID Containe
 
     MonitorInfo.MonitorDescription.Size = sizeof(MonitorInfo.MonitorDescription);
     MonitorInfo.MonitorDescription.Type = IDDCX_MONITOR_DESCRIPTION_TYPE_EDID;
-    if (ConnectorIndex >= ARRAYSIZE(s_SampleMonitors))
+    if (ConnectorIndex >= ARRAYSIZE(s_SampleMonitors)) // create edid-less monitor
     {
         MonitorInfo.MonitorDescription.DataSize = 0;
         MonitorInfo.MonitorDescription.pData = nullptr;
