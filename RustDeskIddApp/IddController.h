@@ -3,6 +3,10 @@
 #include <tchar.h>
 #include <swdevice.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief Install or Update RustDeskIddDriver.
  *
@@ -38,7 +42,7 @@ BOOL Uninstall(LPCTSTR fullInfPath, PBOOL rebootRequired);
  * @see GetLastMsg#GetLastMsg
  *
  */
-BOOL IsDeviceCreated(BOOL* created);
+BOOL IsDeviceCreated(PBOOL created);
 
 /**
  * @brief Create device.
@@ -52,7 +56,7 @@ BOOL IsDeviceCreated(BOOL* created);
  * @see GetLastMsg#GetLastMsg
  *
  */
-BOOL DeviceCreate(HSWDEVICE* hSwDevice);
+BOOL DeviceCreate(PHSWDEVICE hSwDevice);
 
 /**
  * @brief Close device.
@@ -93,12 +97,12 @@ BOOL MonitorPlugIn(UINT index, INT retries);
  */
 BOOL MonitorPlugOut(UINT index);
 
-typedef struct {
+typedef struct _MonitorMode {
     DWORD width;
     DWORD height;
     // Sync affects frequency.
     DWORD sync;
-} MonitorMode;
+} MonitorMode, *PMonitorMode;
 
 /**
  * @brief Update monitor mode.
@@ -112,7 +116,7 @@ typedef struct {
  * @see GetLastMsg#GetLastMsg
  *
  */
-BOOL MonitorModesUpdate(UINT index, UINT modeCount, MonitorMode *modes);
+BOOL MonitorModesUpdate(UINT index, UINT modeCount, PMonitorMode modes);
 
 /**
  * @brief Get last error message.
@@ -131,3 +135,7 @@ const char* GetLastMsg();
  * 
  */
 VOID SetPrintErrMsg(BOOL b);
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <minwindef.h>
 #include <winioctl.h>
 #include <guiddef.h>
 

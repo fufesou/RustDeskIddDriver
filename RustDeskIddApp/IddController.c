@@ -120,7 +120,7 @@ BOOL Uninstall(LPCTSTR fullInfPath, PBOOL rebootRequired)
     return TRUE;
 }
 
-BOOL IsDeviceCreated(BOOL* created)
+BOOL IsDeviceCreated(PBOOL created)
 {
     SetLastMsg("Sucess");
 
@@ -179,7 +179,7 @@ BOOL IsDeviceCreated(BOOL* created)
     return ret;
 }
 
-BOOL DeviceCreate(HSWDEVICE* hSwDevice)
+BOOL DeviceCreate(PHSWDEVICE hSwDevice)
 {
     SetLastMsg("Sucess");
 
@@ -397,7 +397,7 @@ BOOL MonitorPlugOut(UINT index)
     return ret;
 }
 
-BOOL MonitorModesUpdate(UINT index, UINT modeCount, MonitorMode* modes)
+BOOL MonitorModesUpdate(UINT index, UINT modeCount, PMonitorMode modes)
 {
     SetLastMsg("Sucess");
 
