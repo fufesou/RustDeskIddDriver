@@ -15,15 +15,13 @@ int prompt_input()
     printf("       5. 'd'               5. destroy device\n");
     printf("       6. '1','2','3'       6. plug in monitor 0,1,2\n");
     printf("       7. '4','5','6'       7. plug out monitor 0,1,2\n");
-    printf("       8. 'h','H'           8. monitor 0: h(height-10) H(height+10)\n");
-    printf("       9. 'w','W'           9. monitor 0: w(width-10)  W(width+10) \n");
     return _getch();
 }
 
 int main(int argc, char* argv[])
 {
     HSWDEVICE hSwDevice = NULL;
-    bool bExit = false;
+    BOOL bExit = FALSE;
 
     DWORD width = 1920;
     DWORD height = 1080;
@@ -93,7 +91,9 @@ int main(int argc, char* argv[])
             else
             {
                 printf("Plug in monitor done\n");
-                if (FALSE == MonitorModeUpdate(key - '1', width, height, sync))
+
+                MonitorMode modes[2] = { { 1920, 1080,  60 }, { 1024,  768,  60 }, };
+                if (FALSE == MonitorModesUpdate(key - '1', sizeof(modes)/sizeof(modes[0]), modes))
                 {
                     printf(GetLastMsg());
                 }
@@ -112,60 +112,8 @@ int main(int argc, char* argv[])
                 printf("Plug out monitor done\n");
             }
             break;
-        case 'h':
-            printf("Height decrese begin\n");
-            // demo no need to care about height <= 0
-            height -= 10;
-            if (FALSE == MonitorModeUpdate(0, width, height, sync))
-            {
-                printf(GetLastMsg());
-            }
-            else
-            {
-                printf("Height decrese done\n");
-            }
-            break;
-        case 'H':
-            printf("Height increse begin\n");
-            // demo no need to care about height too big
-            height += 10;
-            if (FALSE == MonitorModeUpdate(0, width, height, sync))
-            {
-                printf(GetLastMsg());
-            }
-            else
-            {
-                printf("Height increse done\n");
-            }
-            break;
-        case 'w':
-            printf("Width decrese begin\n");
-            // demo no need to care about width <= 0
-            width -= 10;
-            if (FALSE == MonitorModeUpdate(0, width, height, sync))
-            {
-                printf(GetLastMsg());
-            }
-            else
-            {
-                printf("Width decrese done\n");
-            }
-            break;
-        case 'W':
-            printf("Width increase begin\n");
-            // demo no need to care about width too big
-            width += 10;
-            if (FALSE == MonitorModeUpdate(0, width, height, sync))
-            {
-                printf(GetLastMsg());
-            }
-            else
-            {
-                printf("Width increase done\n");
-            }
-            break;
         case 'x':
-            bExit = true;
+            bExit = TRUE;
             break;
         default:
             break;
@@ -176,7 +124,7 @@ int main(int argc, char* argv[])
 
     if (hSwDevice)
     {
-        DeviceClose(hSwDevice);
+        SwDeviceClose(hSwDevice);
     }
 
     return 0;

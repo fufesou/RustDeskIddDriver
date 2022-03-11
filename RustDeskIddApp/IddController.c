@@ -14,7 +14,7 @@ const GUID GUID_DEVINTERFACE_IDD_DRIVER_DEVICE = \
 { 0x781EF630, 0x72B2, 0x11d2, { 0xB8, 0x52,  0x00,  0xC0,  0x4E,  0xAF,  0x52,  0x72 } };
 //{781EF630-72B2-11d2-B852-00C04EAF5272}
 
-bool g_printMsg = true;
+BOOL g_printMsg = TRUE;
 char g_lastMsg[1024];
 const char* g_msgHeader = "RustDeskIdd: ";
 
@@ -40,8 +40,8 @@ BOOLEAN GetDevicePath2(
     _In_ size_t BufLen
 );
 
-HANDLE DeviceOpen();
-VOID DeviceClose(HANDLE handle);
+HANDLE DeviceOpenHandle();
+VOID DeviceCloseHandle(HANDLE handle);
 
 void SetLastMsg(const char* format, ...)
 {
@@ -205,7 +205,7 @@ BOOL DeviceCreate(HSWDEVICE* hSwDevice)
     }
 
     // create device
-    HANDLE hEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    HANDLE hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
     if (hEvent == INVALID_HANDLE_VALUE || hEvent == NULL)
     {
         DWORD error = GetLastError();
@@ -241,7 +241,7 @@ BOOL DeviceCreate(HSWDEVICE* hSwDevice)
         L"HTREE\\ROOT\\0",
         &createInfo,
         0,
-        nullptr,
+        NULL,
         CreationCallback,
         &hEvent,
         hSwDevice);
@@ -299,7 +299,7 @@ BOOL MonitorPlugIn(UINT index, INT retries)
     HANDLE hDevice = INVALID_HANDLE_VALUE;
     for (; retries >= 0; --retries)
     {
-        hDevice = DeviceOpen();
+        hDevice = DeviceOpenHandle();
         if (hDevice != INVALID_HANDLE_VALUE && hDevice != NULL)
         {
             break;
@@ -352,7 +352,7 @@ BOOL MonitorPlugIn(UINT index, INT retries)
         }
     }
 
-    DeviceClose(hDevice);
+    DeviceCloseHandle(hDevice);
     return ret;
 }
 
@@ -360,7 +360,7 @@ BOOL MonitorPlugOut(UINT index)
 {
     SetLastMsg("Sucess");
 
-    HANDLE hDevice = DeviceOpen();
+    HANDLE hDevice = DeviceOpenHandle();
     if (hDevice == INVALID_HANDLE_VALUE || hDevice == NULL)
     {
         return FALSE;
@@ -393,15 +393,15 @@ BOOL MonitorPlugOut(UINT index)
         ret = TRUE;
     }
 
-    DeviceClose(hDevice);
+    DeviceCloseHandle(hDevice);
     return ret;
 }
 
-BOOL MonitorModeUpdate(UINT index, DWORD width, DWORD height, DWORD sync)
+BOOL MonitorModesUpdate(UINT index, UINT modeCount, MonitorMode* modes)
 {
     SetLastMsg("Sucess");
 
-    HANDLE hDevice = DeviceOpen();
+    HANDLE hDevice = DeviceOpenHandle();
     if (hDevice == INVALID_HANDLE_VALUE || hDevice == NULL)
     {
         return FALSE;
@@ -409,16 +409,31 @@ BOOL MonitorModeUpdate(UINT index, DWORD width, DWORD height, DWORD sync)
 
     BOOL ret = FALSE;
     DWORD junk = 0;
-    CtlMonitorMode monitorMode;
-    monitorMode.ConnectorIndex = index;
-    monitorMode.Width = width;
-    monitorMode.Height = height;
-    monitorMode.Sync = sync;
+    size_t buflen = sizeof(UINT) * 2 + modeCount * sizeof(MonitorMode);
+    PCtlMonitorModes pMonitorModes = (PCtlMonitorModes)malloc(buflen);
+    if (pMonitorModes == NULL)
+    {
+        SetLastMsg("CtlMonitorModes malloc failed 0x%lx\n");
+        if (g_printMsg)
+        {
+            printf(g_lastMsg);
+        }
+        return FALSE;
+    }
+
+    pMonitorModes->ConnectorIndex = index;
+    pMonitorModes->ModeCount = modeCount;
+    for (UINT i = 0; i < modeCount; ++i)
+    {
+        pMonitorModes->Modes[i].Width = modes[i].width;
+        pMonitorModes->Modes[i].Height = modes[i].height;
+        pMonitorModes->Modes[i].Sync = modes[i].sync;
+    }
     if (!DeviceIoControl(
         hDevice,
         IOCTL_CHANGER_IDD_UPDATE_MONITOR_MODE,
-        &monitorMode,               // Ptr to InBuffer
-        sizeof(CtlMonitorMode),     // Length of InBuffer
+        pMonitorModes,               // Ptr to InBuffer
+        buflen,                     // Length of InBuffer
         NULL,                       // Ptr to OutBuffer
         0,                          // Length of OutBuffer
         &junk,                      // BytesReturned
@@ -437,7 +452,8 @@ BOOL MonitorModeUpdate(UINT index, DWORD width, DWORD height, DWORD sync)
         ret = TRUE;
     }
 
-    DeviceClose(hDevice);
+    free(pMonitorModes);
+    DeviceCloseHandle(hDevice);
     return ret;
 }
 
@@ -702,12 +718,12 @@ Clean0:
 }
 
 // https://stackoverflow.com/questions/67164846/createfile-fails-unless-i-disable-enable-my-device
-HANDLE DeviceOpen()
+HANDLE DeviceOpenHandle()
 {
     SetLastMsg("Sucess");
 
-    const int maxDevPathLen = 256;
-    TCHAR devicePath[maxDevPathLen] = { 0 };
+    // const int maxDevPathLen = 256;
+    TCHAR devicePath[256] = { 0 };
     HANDLE hDevice = INVALID_HANDLE_VALUE;
     do
     {
@@ -753,7 +769,7 @@ HANDLE DeviceOpen()
     return hDevice;
 }
 
-VOID DeviceClose(HANDLE handle)
+VOID DeviceCloseHandle(HANDLE handle)
 {
     if (handle != INVALID_HANDLE_VALUE && handle != NULL)
     {

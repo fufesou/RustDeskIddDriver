@@ -52,6 +52,8 @@ static const struct IndirectSampleMonitor::SampleMonitorMode s_SampleDefaultMode
 
 // FOR SAMPLE PURPOSES ONLY, Static info about monitors that will be reported to OS
 // TODO: Add more monitors, and adjust default resolutions.
+// 
+// https://github.com/roshkins/IddSampleDriver/blob/df7238c1f242e1093cdcab0ea749f34094570283/IddSampleDriver/Driver.cpp#L368
 static const struct IndirectSampleMonitor s_SampleMonitors[] =
 {
     // Modified EDID from Dell S2719DGF
@@ -90,6 +92,8 @@ static const struct IndirectSampleMonitor s_SampleMonitors[] =
         },
         0
     }
+    // Another EDID
+    // https://github.com/roshkins/IddSampleDriver/blob/df7238c1f242e1093cdcab0ea749f34094570283/IddSampleDriver/Driver.cpp#L419
 };
 
 #pragma endregion
@@ -904,13 +908,11 @@ NTSTATUS IndirectDeviceContext::PlugOutMonitor(PCtlPlugOut Param)
     return Status;
 }
 
-NTSTATUS IndirectDeviceContext::UpdateMonitorMode(PCtlMonitorMode Param)
+NTSTATUS IndirectDeviceContext::UpdateMonitorModes(PCtlMonitorModes Param)
 {
     // Unimplemented
     UINT ConnectorIndex = Param->ConnectorIndex;
-    DWORD Width = Param->Width;
-    DWORD Height = Param->Height;
-    DWORD Sync = Param->Sync;
+    UINT ModeCount = Param->ModeCount;
 
     TraceEvents(TRACE_LEVEL_INFORMATION,
         TRACE_DEVICE,
@@ -922,9 +924,34 @@ NTSTATUS IndirectDeviceContext::UpdateMonitorMode(PCtlMonitorMode Param)
         return STATUS_ERROR_MONITOR_NOT_EXISTS;
     }
 
-    IDDCX_TARGET_MODE TargetMode = CreateIddCxTargetMode(Width, Height, Sync);
-    IDARG_IN_UPDATEMODES UpdateModes{ IDDCX_UPDATE_REASON_OTHER, 1, &TargetMode };
+    if (ModeCount == 0)
+    {
+        TraceEvents(TRACE_LEVEL_ERROR,
+            TRACE_DEVICE,
+            "%!FUNC! monitor %u ModeCount is 0",
+            ConnectorIndex);
+        return STATUS_ERROR_MONITOR_INVALID_PARAM;
+    }
+
+    IDDCX_TARGET_MODE* PTargetMode = (IDDCX_TARGET_MODE*)malloc(sizeof(IDDCX_TARGET_MODE) * ModeCount);
+    if (PTargetMode == NULL)
+    {
+        TraceEvents(TRACE_LEVEL_ERROR,
+            TRACE_DEVICE,
+            "%!FUNC! monitor %u alloc failed",
+            ConnectorIndex);
+        return STATUS_ERROR_MONITOR_OOM;
+    }
+    for (UINT i = 0; i < ModeCount; ++i)
+    {
+        PTargetMode[i] = CreateIddCxTargetMode(
+            Param->Modes[i].Width,
+            Param->Modes[i].Height,
+            Param->Modes[i].Sync);
+    }
+    IDARG_IN_UPDATEMODES UpdateModes{ IDDCX_UPDATE_REASON_OTHER, ModeCount, PTargetMode };
     NTSTATUS Status = IddCxMonitorUpdateModes(m_Monitors[ConnectorIndex], &UpdateModes);
+    free(PTargetMode);
     if (NT_SUCCESS(Status))
     {
         TraceEvents(TRACE_LEVEL_INFORMATION,
@@ -995,11 +1022,13 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
 {
     TraceEvents(TRACE_LEVEL_INFORMATION,
         TRACE_DEVICE,
-        "%!FUNC! receive io control code %ul\n", IoControlCode);
+        "%!FUNC! receive io control code %ul, in buf len %u\n",
+        IoControlCode,
+        (unsigned)InputBufferLength);
 
     UNREFERENCED_PARAMETER(Request);
     UNREFERENCED_PARAMETER(OutputBufferLength);
-    UNREFERENCED_PARAMETER(InputBufferLength);
+    // UNREFERENCED_PARAMETER(InputBufferLength);
     // https://docs.microsoft.com/en-us/windows-hardware/drivers/display/iddcx-objects
 
     NTSTATUS Status = STATUS_SUCCESS;
@@ -1024,7 +1053,7 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
         break;
     case IOCTL_CHANGER_IDD_PLUG_OUT:
         PCtlPlugOut pCtlPlugOut;
-        Status = WdfRequestRetrieveInputBuffer(Request, sizeof(CtlPlugOut), &Buffer, &BufSize);
+        Status = WdfRequestRetrieveInputBuffer(Request, InputBufferLength, &Buffer, &BufSize);
         if (!NT_SUCCESS(Status))
         {
             TraceEvents(TRACE_LEVEL_ERROR,
@@ -1037,8 +1066,8 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
         Status = pContext->pContext->PlugOutMonitor(pCtlPlugOut);
         break;
     case IOCTL_CHANGER_IDD_UPDATE_MONITOR_MODE:
-        PCtlMonitorMode pMonitorMode;
-        Status = WdfRequestRetrieveInputBuffer(Request, sizeof(CtlMonitorMode), &Buffer, &BufSize);
+        PCtlMonitorModes pMonitorModes;
+        Status = WdfRequestRetrieveInputBuffer(Request, InputBufferLength, &Buffer, &BufSize);
         if (!NT_SUCCESS(Status))
         {
             TraceEvents(TRACE_LEVEL_ERROR,
@@ -1047,8 +1076,8 @@ IddRustDeskIoDeviceControl(WDFDEVICE Device, WDFREQUEST Request, size_t OutputBu
                 Status);
             break;
         }
-        pMonitorMode = (PCtlMonitorMode)Buffer;
-        Status = pContext->pContext->UpdateMonitorMode(pMonitorMode);
+        pMonitorModes = (PCtlMonitorModes)Buffer;
+        Status = pContext->pContext->UpdateMonitorModes(pMonitorModes);
         break;
     default:
         TraceEvents(TRACE_LEVEL_ERROR,
@@ -1214,6 +1243,8 @@ NTSTATUS IddRustDeskMonitorGetDefaultModes(IDDCX_MONITOR MonitorObject, const ID
     return STATUS_SUCCESS;
 }
 
+// more query modes
+// https://github.com/roshkins/IddSampleDriver/blob/df7238c1f242e1093cdcab0ea749f34094570283/IddSampleDriver/Driver.cpp#L699
 _Use_decl_annotations_
 NTSTATUS IddRustDeskMonitorQueryModes(IDDCX_MONITOR MonitorObject, const IDARG_IN_QUERYTARGETMODES* pInArgs, IDARG_OUT_QUERYTARGETMODES* pOutArgs)
 {

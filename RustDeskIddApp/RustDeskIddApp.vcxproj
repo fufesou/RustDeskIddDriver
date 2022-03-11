@@ -268,11 +268,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="IddController.cpp" />
-    <ClCompile Include="main.cpp" />
+    <ClInclude Include="IddController.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="IddController.h" />
+    <ClCompile Include="IddController.c" />
+    <ClCompile Include="main.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -17,11 +17,13 @@
                                                        FILE_READ_ACCESS | FILE_WRITE_ACCESS)
 
 
-#define STATUS_ERROR_ADAPTER_NOT_INIT (3 << 30) + 11
-//#define STATUS_ERROR_IO_CTL_GET_INPUT (3 << 30) + 21
-//#define STATUS_ERROR_IO_CTL_GET_OUTPUT (3 << 30) + 22
-#define STATUS_ERROR_MONITOR_EXISTS (3 << 30) + 51
-#define STATUS_ERROR_MONITOR_NOT_EXISTS (3 << 30) + 52
+#define STATUS_ERROR_ADAPTER_NOT_INIT      (3 << 30) + 11
+//#define STATUS_ERROR_IO_CTL_GET_INPUT    (3 << 30) + 21
+//#define STATUS_ERROR_IO_CTL_GET_OUTPUT   (3 << 30) + 22
+#define STATUS_ERROR_MONITOR_EXISTS        (3 << 30) + 51
+#define STATUS_ERROR_MONITOR_NOT_EXISTS    (3 << 30) + 52
+#define STATUS_ERROR_MONITOR_INVALID_PARAM (3 << 30) + 53
+#define STATUS_ERROR_MONITOR_OOM           (3 << 30) + 54
 
 typedef struct _CtlPlugIn {
     UINT ConnectorIndex;
@@ -32,12 +34,15 @@ typedef struct _CtlPlugOut {
     UINT ConnectorIndex;
 } CtlPlugOut, *PCtlPlugOut;
 
-typedef struct _CtlMonitorMode {
+typedef struct _CtlMonitorModes {
     UINT ConnectorIndex;
-    DWORD Width;
-    DWORD Height;
-    DWORD Sync;
-} CtlMonitorMode, *PCtlMonitorMode;
+    UINT ModeCount;
+    struct {
+        DWORD Width;
+        DWORD Height;
+        DWORD Sync;
+    } Modes[1];
+} CtlMonitorModes, *PCtlMonitorModes;
 
 
 #define SYMBOLIC_LINK_NAME L"\\Device\\RustDeskIddDriver"

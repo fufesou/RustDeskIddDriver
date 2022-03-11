@@ -45,7 +45,7 @@ BOOL IsDeviceCreated(BOOL* created);
  *        Only one device should be created.
  *        If device is installed ealier, this function returns FALSE.
  * 
- * @param hSwDevice [out] Handler of software device, used by SwDeviceCreate(). Should be **NULL**.
+ * @param hSwDevice [out] Handler of software device, used by DeviceCreate(). Should be **NULL**.
  *
  * @return TRUE/FALSE. If FALSE returned, error message can be retrieved by GetLastMsg()
  * 
@@ -93,20 +93,26 @@ BOOL MonitorPlugIn(UINT index, INT retries);
  */
 BOOL MonitorPlugOut(UINT index);
 
+typedef struct {
+    DWORD width;
+    DWORD height;
+    // Sync affects frequency.
+    DWORD sync;
+} MonitorMode;
+
 /**
  * @brief Update monitor mode.
  *
- * @param index  [in] Monitor index, should be 0, 1, 2.
- * @param width  [in] Monitor Width.
- * @param height [in] Monitor Height.
- * @param sync   [in] Sync affects frequency.
+ * @param index       [in] Monitor index, should be 0, 1, 2.
+ * @param modeCount   [in] Monitor mode count.
+ * @param MonitorMode [in] Monitor mode data.
  *
  * @return TRUE/FALSE. If FALSE returned, error message can be retrieved by GetLastMsg()
  *
  * @see GetLastMsg#GetLastMsg
  *
  */
-BOOL MonitorModeUpdate(UINT index, DWORD width, DWORD height, DWORD sync);
+BOOL MonitorModesUpdate(UINT index, UINT modeCount, MonitorMode *modes);
 
 /**
  * @brief Get last error message.
