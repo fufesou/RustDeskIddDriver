@@ -15,8 +15,8 @@ int prompt_input()
     printf("       5. 'd'               5. destroy device\n");
     printf("       6. '1','2','3'       6. plug in monitor 0,1,2\n");
     printf("       7. '4','5','6'       7. plug out monitor 0,1,2\n");
-    printf("       8. 'h','H'           8. monitor 0: h(height-1) H(height+1)\n");
-    printf("       9. 'w','W'           9. monitor 0: w(width-1)  W(width+1) \n");
+    printf("       8. 'h','H'           8. monitor 0: h(height-10) H(height+10)\n");
+    printf("       9. 'w','W'           9. monitor 0: w(width-10)  W(width+10) \n");
     return _getch();
 }
 
@@ -25,8 +25,8 @@ int main(int argc, char* argv[])
     HSWDEVICE hSwDevice = NULL;
     bool bExit = false;
 
-    DWORD height = 1920;
-    DWORD width = 1080;
+    DWORD width = 1920;
+    DWORD height = 1080;
     DWORD sync = 60;
     do
     {
@@ -93,7 +93,7 @@ int main(int argc, char* argv[])
             else
             {
                 printf("Plug in monitor done\n");
-                if (FALSE == MonitorModeUpdate(key - '1', height, width, sync))
+                if (FALSE == MonitorModeUpdate(key - '1', width, height, sync))
                 {
                     printf(GetLastMsg());
                 }
@@ -115,7 +115,8 @@ int main(int argc, char* argv[])
         case 'h':
             printf("Height decrese begin\n");
             // demo no need to care about height <= 0
-            if (FALSE == MonitorModeUpdate(0, --height, width, sync))
+            height -= 10;
+            if (FALSE == MonitorModeUpdate(0, width, height, sync))
             {
                 printf(GetLastMsg());
             }
@@ -127,7 +128,8 @@ int main(int argc, char* argv[])
         case 'H':
             printf("Height increse begin\n");
             // demo no need to care about height too big
-            if (FALSE == MonitorModeUpdate(0, ++height, width, sync))
+            height += 10;
+            if (FALSE == MonitorModeUpdate(0, width, height, sync))
             {
                 printf(GetLastMsg());
             }
@@ -139,7 +141,8 @@ int main(int argc, char* argv[])
         case 'w':
             printf("Width decrese begin\n");
             // demo no need to care about width <= 0
-            if (FALSE == MonitorModeUpdate(0, height, --width, sync))
+            width -= 10;
+            if (FALSE == MonitorModeUpdate(0, width, height, sync))
             {
                 printf(GetLastMsg());
             }
@@ -151,7 +154,8 @@ int main(int argc, char* argv[])
         case 'W':
             printf("Width increase begin\n");
             // demo no need to care about width too big
-            if (FALSE == MonitorModeUpdate(0, height, ++width, sync))
+            width += 10;
+            if (FALSE == MonitorModeUpdate(0, width, height, sync))
             {
                 printf(GetLastMsg());
             }

@@ -34,8 +34,8 @@ typedef struct _CtlPlugOut {
 
 typedef struct _CtlMonitorMode {
     UINT ConnectorIndex;
-    DWORD Height;
     DWORD Width;
+    DWORD Height;
     DWORD Sync;
 } CtlMonitorMode, *PCtlMonitorMode;
 

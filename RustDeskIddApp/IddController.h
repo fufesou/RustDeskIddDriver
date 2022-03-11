@@ -97,16 +97,16 @@ BOOL MonitorPlugOut(UINT index);
  * @brief Update monitor mode.
  *
  * @param index  [in] Monitor index, should be 0, 1, 2.
- * @param height [in] 
- * @param width  [in] 
- * @param sync   [in] 
+ * @param width  [in] Monitor Width.
+ * @param height [in] Monitor Height.
+ * @param sync   [in] Sync affects frequency.
  *
  * @return TRUE/FALSE. If FALSE returned, error message can be retrieved by GetLastMsg()
  *
  * @see GetLastMsg#GetLastMsg
  *
  */
-BOOL MonitorModeUpdate(UINT index, DWORD height, DWORD width, DWORD sync);
+BOOL MonitorModeUpdate(UINT index, DWORD width, DWORD height, DWORD sync);
 
 /**
  * @brief Get last error message.

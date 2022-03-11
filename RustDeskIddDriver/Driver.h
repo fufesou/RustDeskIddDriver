@@ -109,7 +109,7 @@ namespace Microsoft
             NTSTATUS PlugInMonitor(PCtlPlugIn Param);
             NTSTATUS PlugOutMonitor(PCtlPlugOut Param);
 
-            NTSTATUS UpdateMonitorModes(PCtlMonitorMode Param);
+            NTSTATUS UpdateMonitorMode(PCtlMonitorMode Param);
 
             static UINT GetMaxMonitorCount()
             {

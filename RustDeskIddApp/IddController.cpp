@@ -397,7 +397,7 @@ BOOL MonitorPlugOut(UINT index)
     return ret;
 }
 
-BOOL MonitorModeUpdate(UINT index, DWORD height, DWORD width, DWORD sync)
+BOOL MonitorModeUpdate(UINT index, DWORD width, DWORD height, DWORD sync)
 {
     SetLastMsg("Sucess");
 
@@ -411,8 +411,8 @@ BOOL MonitorModeUpdate(UINT index, DWORD height, DWORD width, DWORD sync)
     DWORD junk = 0;
     CtlMonitorMode monitorMode;
     monitorMode.ConnectorIndex = index;
-    monitorMode.Height = height;
     monitorMode.Width = width;
+    monitorMode.Height = height;
     monitorMode.Sync = sync;
     if (!DeviceIoControl(
         hDevice,
