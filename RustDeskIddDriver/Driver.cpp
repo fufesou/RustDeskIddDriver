@@ -51,9 +51,6 @@ static const struct IndirectSampleMonitor::SampleMonitorMode s_SampleDefaultMode
 };
 
 // FOR SAMPLE PURPOSES ONLY, Static info about monitors that will be reported to OS
-// TODO: Add more monitors, and adjust default resolutions.
-// 
-// https://github.com/roshkins/IddSampleDriver/blob/df7238c1f242e1093cdcab0ea749f34094570283/IddSampleDriver/Driver.cpp#L368
 static const struct IndirectSampleMonitor s_SampleMonitors[] =
 {
     // Modified EDID from Dell S2719DGF
@@ -781,6 +778,7 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
 NTSTATUS IndirectDeviceContext::PlugInMonitor(PCtlPlugIn Param)
 {
     UINT ConnectorIndex = Param->ConnectorIndex;
+    UINT MonitorEDID = Param->MonitorEDID;
     GUID ContainerID = Param->ContainerId;
     TraceEvents(TRACE_LEVEL_INFORMATION,
         TRACE_DEVICE,
@@ -814,7 +812,7 @@ NTSTATUS IndirectDeviceContext::PlugInMonitor(PCtlPlugIn Param)
 
     MonitorInfo.MonitorDescription.Size = sizeof(MonitorInfo.MonitorDescription);
     MonitorInfo.MonitorDescription.Type = IDDCX_MONITOR_DESCRIPTION_TYPE_EDID;
-    if (ConnectorIndex >= ARRAYSIZE(s_SampleMonitors)) // create edid-less monitor
+    if (MonitorEDID >= ARRAYSIZE(s_SampleMonitors)) // create edid-less monitor
     {
         MonitorInfo.MonitorDescription.DataSize = 0;
         MonitorInfo.MonitorDescription.pData = nullptr;
@@ -822,11 +820,9 @@ NTSTATUS IndirectDeviceContext::PlugInMonitor(PCtlPlugIn Param)
     else
     {
         MonitorInfo.MonitorDescription.DataSize = IndirectSampleMonitor::szEdidBlock;
-        MonitorInfo.MonitorDescription.pData = const_cast<BYTE*>(s_SampleMonitors[ConnectorIndex].pEdidBlock);
+        MonitorInfo.MonitorDescription.pData = const_cast<BYTE*>(s_SampleMonitors[MonitorEDID].pEdidBlock);
     }
 
-    // Create a container ID
-    // CoCreateGuid(&MonitorInfo.MonitorContainerId);
     MonitorInfo.MonitorContainerId = ContainerID;
 
     IDARG_IN_MONITORCREATE MonitorCreate = {};

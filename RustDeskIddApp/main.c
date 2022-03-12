@@ -84,7 +84,7 @@ int main(int argc, char* argv[])
         case '2':
         case '3':
             printf("Plug in monitor begin\n");
-            if (FALSE == MonitorPlugIn(key - '1', 25))
+            if (FALSE == MonitorPlugIn(key - '1', 0, 25))
             {
                 printf(GetLastMsg());
             }
