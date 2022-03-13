@@ -26,6 +26,14 @@ int main(int argc, char* argv[])
     DWORD width = 1920;
     DWORD height = 1080;
     DWORD sync = 60;
+
+    TCHAR exePath[1024] = { 0, };
+    (void)GetModuleFileName(NULL, exePath, sizeof(exePath)/sizeof(exePath[0]) - 1);
+    *_tcsrchr(exePath, _T('\\')) = _T('\0');
+    PTCHAR infPath = _T("RustDeskIddDriver\\RustDeskIddDriver.inf");
+    TCHAR infFullPath[1024] = { 0, };
+    _sntprintf_s(infFullPath, sizeof(infFullPath) / sizeof(infFullPath[0]), _TRUNCATE, _T("%s\\%s"), exePath, infPath);
+
     do
     {
         int key = prompt_input();
@@ -34,8 +42,7 @@ int main(int argc, char* argv[])
         {
         case 'i':
             printf("Install or update driver begin\n");
-            if (FALSE == InstallUpdate(_T("C:\\Users\\cxl3\\Desktop\\Debug\\RustDeskIddDriver\\RustDeskIddDriver.inf"), &rebootRequired))
-            //if (FALSE == InstallUpdate(_T("D:\\projects\\windows\\IndirectDisplay\\x64\\Debug\\RustDeskIddDriver\\RustDeskIddDriver.inf"), &rebootRequired))
+            if (FALSE == InstallUpdate(infFullPath, &rebootRequired))
             {
                 printf(GetLastMsg());
             }
@@ -46,7 +53,7 @@ int main(int argc, char* argv[])
             break;
         case 'u':
             printf("Uninstall driver begin\n");
-            if (FALSE == Uninstall(_T("C:\\Users\\cxl3\\Desktop\\Debug\\RustDeskIddDriver\\RustDeskIddDriver.inf"), &rebootRequired))
+            if (FALSE == Uninstall(infFullPath, &rebootRequired))
             //if (FALSE == InstallUpdate(_T("D:\\projects\\windows\\IndirectDisplay\\x64\\Debug\\RustDeskIddDriver\\RustDeskIddDriver.inf"), &rebootRequired))
             {
                 printf(GetLastMsg());
