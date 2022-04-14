@@ -5,6 +5,24 @@
 
 #include "./IddController.h"
 
+#pragma comment(lib, "kernel32.lib")
+#pragma comment(lib, "user32.lib")
+#pragma comment(lib, "gdi32.lib")
+#pragma comment(lib, "winspool.lib")
+#pragma comment(lib, "comdlg32.lib")
+#pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "oleaut32.lib")
+#pragma comment(lib, "uuid.lib")
+#pragma comment(lib, "odbc32.lib")
+#pragma comment(lib, "odbccp32.lib")
+#pragma comment(lib, "swdevice.lib")
+#pragma comment(lib, "Cfgmgr32.lib")
+#pragma comment(lib, "Setupapi.lib")
+#pragma comment(lib, "Newdev.lib")
+
+
 int prompt_input()
 {
     printf("Press  key                  execute:\n");
@@ -18,7 +36,7 @@ int prompt_input()
     return _getch();
 }
 
-int main(int argc, char* argv[])
+int __cdecl main(int argc, char* argv[])
 {
     HSWDEVICE hSwDevice = NULL;
     BOOL bExit = FALSE;
