@@ -7,6 +7,11 @@
 extern "C" {
 #endif
 
+#if (NTDDI_VERSION < NTDDI_WIN8)
+    DECLARE_HANDLE(HSWDEVICE);
+    typedef HSWDEVICE* PHSWDEVICE;
+#endif
+
 /**
  * @brief Install or Update RustDeskIddDriver.
  *

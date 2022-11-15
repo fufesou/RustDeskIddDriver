@@ -1,4 +1,7 @@
 #include "./IddController.h"
+
+#if (NTDDI_VERSION >= NTDDI_WIN8)
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <newdev.h>
@@ -10,13 +13,27 @@
 #include "../RustDeskIddDriver/Public.h"
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+    void SetLastMsg(const char* format, ...);
+    BOOL ReturnUnsupported(char* call);
+
+    BOOL g_printMsg;
+    char g_lastMsg[1024];
+    const char* g_msgHeader;
+
+#ifdef __cplusplus
+}
+#endif
+
+
 const GUID GUID_DEVINTERFACE_IDD_DRIVER_DEVICE = \
 { 0x781EF630, 0x72B2, 0x11d2, { 0xB8, 0x52,  0x00,  0xC0,  0x4E,  0xAF,  0x52,  0x72 } };
 //{781EF630-72B2-11d2-B852-00C04EAF5272}
 
-BOOL g_printMsg = TRUE;
-char g_lastMsg[1024];
-const char* g_msgHeader = "RustDeskIdd: ";
+
 
 VOID WINAPI
 CreationCallback(
@@ -42,27 +59,6 @@ BOOLEAN GetDevicePath2(
 
 HANDLE DeviceOpenHandle();
 VOID DeviceCloseHandle(HANDLE handle);
-
-void SetLastMsg(const char* format, ...)
-{
-    memset(g_lastMsg, 0, sizeof(g_lastMsg));
-    memcpy_s(g_lastMsg, sizeof(g_lastMsg), g_msgHeader, strlen(g_msgHeader));
-
-    va_list args;
-    va_start(args, format);
-    vsnprintf_s(
-        g_lastMsg + strlen(g_msgHeader),
-        sizeof(g_lastMsg) - strlen(g_msgHeader),
-        _TRUNCATE,
-        format,
-        args);
-    va_end(args);
-}
-
-const char* GetLastMsg()
-{
-    return g_lastMsg;
-}
 
 BOOL InstallUpdate(LPCTSTR fullInfPath, PBOOL rebootRequired)
 {
@@ -778,7 +774,5 @@ VOID DeviceCloseHandle(HANDLE handle)
     }
 }
 
-VOID SetPrintErrMsg(BOOL b)
-{
-    g_printMsg = (b == TRUE);
-}
+
+#endif // NTDDI_VERSION
