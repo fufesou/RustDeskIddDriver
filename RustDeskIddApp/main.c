@@ -149,9 +149,7 @@ int __cdecl main(int argc, char* argv[])
 
     if (hSwDevice)
     {
-#if (NTDDI_VERSION >= NTDDI_WIN8)
         SwDeviceClose(hSwDevice);
-#endif
     }
 
     return 0;

@@ -271,9 +271,7 @@
     <ClInclude Include="IddController.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="debug_msg.c" />
     <ClCompile Include="IddController.c" />
-    <ClCompile Include="IddController_empty.c" />
     <ClCompile Include="main.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

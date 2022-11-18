@@ -26,11 +26,5 @@
     <ClCompile Include="IddController.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="IddController_empty.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="debug_msg.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
 </Project>
