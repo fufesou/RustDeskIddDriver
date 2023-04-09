@@ -27,10 +27,10 @@ int prompt_input()
 {
     printf("Press  key                  execute:\n");
     printf("       1. 'x'               1. exit\n");
-    printf("       2. 'i'               2. install or update driver\n");
-    printf("       3. 'u'               3. uninstall driver\n");
-    printf("       4. 'c'               4. create device\n");
-    printf("       5. 'd'               5. destroy device\n");
+    printf("       2. 'c'               2. create device\n");
+    printf("       3. 'd'               3. destroy device\n");
+    printf("       4. 'i'               4. install or update driver\n");
+    printf("       5. 'u'               5. uninstall driver\n");
     printf("       6. '1','2','3'       6. plug in monitor 0,1,2\n");
     printf("       7. '4','5','6'       7. plug out monitor 0,1,2\n");
     return _getch();
