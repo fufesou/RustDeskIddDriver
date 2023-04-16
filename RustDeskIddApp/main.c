@@ -26,13 +26,13 @@
 int prompt_input()
 {
     printf("Press  key                  execute:\n");
-    printf("       1. 'x'               1. exit\n");
+    printf("       1. 'q'               1. quit\n");
     printf("       2. 'c'               2. create device\n");
     printf("       3. 'd'               3. destroy device\n");
     printf("       4. 'i'               4. install or update driver\n");
     printf("       5. 'u'               5. uninstall driver\n");
-    printf("       6. '1','2','3'       6. plug in monitor 0,1,2\n");
-    printf("       7. '4','5','6'       7. plug out monitor 0,1,2\n");
+    printf("       6. 'a'               6. plug in monitor\n");
+    printf("       7. 'b'               7. plug out monitor\n");
     return _getch();
 }
 
@@ -44,6 +44,8 @@ int __cdecl main(int argc, char* argv[])
     DWORD width = 1920;
     DWORD height = 1080;
     DWORD sync = 60;
+
+    UINT index = 0;
 
     TCHAR exePath[1024] = { 0, };
     (void)GetModuleFileName(NULL, exePath, sizeof(exePath)/sizeof(exePath[0]) - 1);
@@ -105,11 +107,9 @@ int __cdecl main(int argc, char* argv[])
             hSwDevice = NULL;
             printf("Close device done\n");
             break;
-        case '1':
-        case '2':
-        case '3':
-            printf("Plug in monitor begin\n");
-            if (FALSE == MonitorPlugIn(key - '1', 0, 25))
+        case 'a':
+            printf("Plug in monitor begin, current index %u\n", index);
+            if (FALSE == MonitorPlugIn(index, 0, 25))
             {
                 printf(GetLastMsg());
             }
@@ -118,26 +118,32 @@ int __cdecl main(int argc, char* argv[])
                 printf("Plug in monitor done\n");
 
                 MonitorMode modes[2] = { { 1920, 1080,  60 }, { 1024,  768,  60 }, };
-                if (FALSE == MonitorModesUpdate(key - '1', sizeof(modes)/sizeof(modes[0]), modes))
+                if (FALSE == MonitorModesUpdate(index, sizeof(modes)/sizeof(modes[0]), modes))
                 {
                     printf(GetLastMsg());
                 }
+
+                index += 1;
             }
             break;
-        case '4':
-        case '5':
-        case '6':
-            printf("Plug out monitor begin\n");
-            if (FALSE == MonitorPlugOut(key - '4'))
+        case 'b':
+            if (index == 0) {
+                printf("No virtual monitors\n");
+                break;
+            }
+
+            printf("Plug out monitor begin, current index %u\n", index - 1);
+            if (FALSE == MonitorPlugOut(index - 1))
             {
                 printf(GetLastMsg());
             }
             else
             {
+                index -= 1;
                 printf("Plug out monitor done\n");
             }
             break;
-        case 'x':
+        case 'q':
             bExit = TRUE;
             break;
         default:
