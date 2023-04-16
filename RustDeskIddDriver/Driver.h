@@ -111,13 +111,15 @@ namespace Microsoft
 
             NTSTATUS UpdateMonitorModes(PCtlMonitorModes Param);
 
+            NTSTATUS CheckIndex(UINT index);
+
             static UINT GetMaxMonitorCount()
             {
                 return m_sMaxMonitorCount;
             }
 
         protected:
-            static constexpr UINT m_sMaxMonitorCount = 3;
+            static constexpr UINT m_sMaxMonitorCount = 10;
             IDDCX_MONITOR m_Monitors[m_sMaxMonitorCount];
 
             NTSTATUS m_AdapterInitStatus;

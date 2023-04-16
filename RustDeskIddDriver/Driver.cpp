@@ -775,11 +775,28 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
     }
 }
 
+NTSTATUS IndirectDeviceContext::CheckIndex(UINT index)
+{
+    if (index >= m_sMaxMonitorCount)
+    {
+        TraceEvents(TRACE_LEVEL_ERROR,
+            TRACE_DEVICE,
+            "%!FUNC! monitor index %u out of range %u", index, m_sMaxMonitorCount);
+        return STATUS_ERROR_INDEX_OOR;
+    }
+    return STATUS_SUCCESS;
+}
+
+#define EARLY_RETURN_NTSTATUS(c) { NTSTATUS ret = (c); if (!NT_SUCCESS(ret)) { return ret; } }
+
 NTSTATUS IndirectDeviceContext::PlugInMonitor(PCtlPlugIn Param)
 {
     UINT ConnectorIndex = Param->ConnectorIndex;
     UINT MonitorEDID = Param->MonitorEDID;
     GUID ContainerID = Param->ContainerId;
+
+    EARLY_RETURN_NTSTATUS(CheckIndex(ConnectorIndex));
+
     TraceEvents(TRACE_LEVEL_INFORMATION,
         TRACE_DEVICE,
         "%!FUNC! begin monitor %u",
@@ -875,10 +892,21 @@ NTSTATUS IndirectDeviceContext::PlugInMonitor(PCtlPlugIn Param)
 NTSTATUS IndirectDeviceContext::PlugOutMonitor(PCtlPlugOut Param)
 {
     UINT ConnectorIndex = Param->ConnectorIndex;
+
+    EARLY_RETURN_NTSTATUS(CheckIndex(ConnectorIndex));
+
     TraceEvents(TRACE_LEVEL_INFORMATION,
         TRACE_DEVICE,
         "%!FUNC! begin monitor %u",
         ConnectorIndex);
+
+    if (ConnectorIndex >= m_sMaxMonitorCount)
+    {
+        TraceEvents(TRACE_LEVEL_ERROR,
+            TRACE_DEVICE,
+            "%!FUNC! monitor index %u out of range %u", ConnectorIndex, m_sMaxMonitorCount);
+        return STATUS_ERROR_INDEX_OOR;
+    }
 
     if (m_Monitors[ConnectorIndex] == NULL)
     {
@@ -910,10 +938,20 @@ NTSTATUS IndirectDeviceContext::UpdateMonitorModes(PCtlMonitorModes Param)
     UINT ConnectorIndex = Param->ConnectorIndex;
     UINT ModeCount = Param->ModeCount;
 
+    EARLY_RETURN_NTSTATUS(CheckIndex(ConnectorIndex));
+
     TraceEvents(TRACE_LEVEL_INFORMATION,
         TRACE_DEVICE,
         "%!FUNC! begin update monitor mode %u",
         ConnectorIndex);
+
+    if (ConnectorIndex >= m_sMaxMonitorCount)
+    {
+        TraceEvents(TRACE_LEVEL_ERROR,
+            TRACE_DEVICE,
+            "%!FUNC! monitor index %u out of range %u", ConnectorIndex, m_sMaxMonitorCount);
+        return STATUS_ERROR_INDEX_OOR;
+    }
 
     if (m_Monitors[ConnectorIndex] == NULL)
     {
