@@ -15,6 +15,10 @@ See [RustDeskIddApp](./RustDeskIddApp) for examples.
 
 The test application to create device, install idd, and plugin monitors.
 
+# TODOs
+
+1. Get the status code from driver when calling `DeviceIoControl`.
+
 ---
 topic: sample
 page_type: sample
