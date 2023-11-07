@@ -49,7 +49,6 @@ BOOLEAN GetDevicePath2(
 
 HANDLE DeviceOpenHandle();
 VOID DeviceCloseHandle(HANDLE handle);
-BOOL DeviceCreateWithLifetimeCheckCreated(BOOL checkCreated, SW_DEVICE_LIFETIME* lifetime, PHSWDEVICE hSwDevice);
 
 void SetLastMsg(const char* format, ...)
 {
@@ -192,12 +191,7 @@ BOOL DeviceCreate(PHSWDEVICE hSwDevice)
     return DeviceCreateWithLifetime(SWDeviceLifetimeHandle, NULL);
 }
 
-BOOL DeviceCreateWithLifetime(SW_DEVICE_LIFETIME* lifetime, PHSWDEVICE hSwDevice)
-{
-    return DeviceCreateWithLifetimeCheckCreated(TRUE, lifetime, hSwDevice);
-}
-
-BOOL DeviceCreateWithLifetimeCheckCreated(BOOL checkCreated, SW_DEVICE_LIFETIME *lifetime, PHSWDEVICE hSwDevice)
+BOOL DeviceCreateWithLifetime(SW_DEVICE_LIFETIME *lifetime, PHSWDEVICE hSwDevice)
 {
     SetLastMsg("Sucess");
 
@@ -207,23 +201,13 @@ BOOL DeviceCreateWithLifetimeCheckCreated(BOOL checkCreated, SW_DEVICE_LIFETIME 
         return FALSE;
     }
 
-    if (checkCreated == TRUE)
-    {
-        BOOL created = TRUE;
-        if (FALSE == IsDeviceCreated(&created))
-        {
-            return FALSE;
-        }
-        if (created == TRUE)
-        {
-            SetLastMsg("Device is already created, please destroy it first\n");
-            if (g_printMsg)
-            {
-                printf(g_lastMsg);
-            }
-            return FALSE;
-        }
-    }
+    // No need to check if the device is previous created.
+    // https://learn.microsoft.com/en-us/windows/win32/api/swdevice/nf-swdevice-swdevicesetlifetime
+    // When a client app calls SwDeviceCreate for a software device that was previously marked for 
+    // SwDeviceLifetimeParentPresent, SwDeviceCreate succeeds if there are no open software device handles for the device 
+    // (only one handle can be open for a device). A client app can then regain control over a persistent software device 
+    // for the purposes of updating properties and interfaces or changing the lifetime.
+    //
 
     // create device
     HANDLE hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -330,7 +314,7 @@ VOID DeviceClose(HSWDEVICE hSwDevice)
         }
 
         HSWDEVICE hSwDevice2 = NULL;
-        if (DeviceCreateWithLifetimeCheckCreated(FALSE, NULL, &hSwDevice2))
+        if (DeviceCreateWithLifetime(NULL, &hSwDevice2))
         {
             if (hSwDevice2 != NULL)
             {
