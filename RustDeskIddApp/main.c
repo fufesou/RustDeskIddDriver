@@ -42,7 +42,6 @@ int __cdecl main(int argc, char* argv[])
 {
     HSWDEVICE hSwDevice = NULL;
     BOOL bExit = FALSE;
-    HRESULT result = E_FAIL;
     SW_DEVICE_LIFETIME lifetime = SWDeviceLifetimeHandle;
 
     DWORD width = 1920;
@@ -99,11 +98,7 @@ int __cdecl main(int argc, char* argv[])
             if (FALSE == DeviceCreateWithLifetime(&lifetime, &hSwDevice))
             {
                 printf(GetLastMsg());
-                if (hSwDevice != NULL)
-                {
-                    result = SwDeviceSetLifetime(hSwDevice, SWDeviceLifetimeHandle);
-                    DeviceClose(hSwDevice);
-                }
+                DeviceClose(hSwDevice);
                 hSwDevice = NULL;
             }
             else
@@ -113,11 +108,7 @@ int __cdecl main(int argc, char* argv[])
             break;
         case 'd':
             printf("Close device begin\n");
-            if (hSwDevice != NULL)
-            {
-                result = SwDeviceSetLifetime(hSwDevice, SWDeviceLifetimeHandle);
-                DeviceClose(hSwDevice);
-            }
+            DeviceClose(hSwDevice);
             hSwDevice = NULL;
             printf("Close device done\n");
             break;

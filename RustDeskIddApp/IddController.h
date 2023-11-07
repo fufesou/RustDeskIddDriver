@@ -78,6 +78,7 @@ BOOL DeviceCreateWithLifetime(SW_DEVICE_LIFETIME * lifetime, PHSWDEVICE hSwDevic
  * @brief Close device.
  *
  * @param hSwDevice Handler of software device, used by SwDeviceClose().
+ *                  If hSwDevice is INVALID_HANDLE_VALUE or NULL, try find and close the device.
  *
  */
 VOID DeviceClose(HSWDEVICE hSwDevice);

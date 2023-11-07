@@ -49,6 +49,7 @@ BOOLEAN GetDevicePath2(
 
 HANDLE DeviceOpenHandle();
 VOID DeviceCloseHandle(HANDLE handle);
+BOOL DeviceCreateWithLifetimeCheckCreated(BOOL checkCreated, SW_DEVICE_LIFETIME* lifetime, PHSWDEVICE hSwDevice);
 
 void SetLastMsg(const char* format, ...)
 {
@@ -191,7 +192,12 @@ BOOL DeviceCreate(PHSWDEVICE hSwDevice)
     return DeviceCreateWithLifetime(SWDeviceLifetimeHandle, NULL);
 }
 
-BOOL DeviceCreateWithLifetime(SW_DEVICE_LIFETIME *lifetime, PHSWDEVICE hSwDevice)
+BOOL DeviceCreateWithLifetime(SW_DEVICE_LIFETIME* lifetime, PHSWDEVICE hSwDevice)
+{
+    return DeviceCreateWithLifetimeCheckCreated(TRUE, lifetime, hSwDevice);
+}
+
+BOOL DeviceCreateWithLifetimeCheckCreated(BOOL checkCreated, SW_DEVICE_LIFETIME *lifetime, PHSWDEVICE hSwDevice)
 {
     SetLastMsg("Sucess");
 
@@ -201,19 +207,22 @@ BOOL DeviceCreateWithLifetime(SW_DEVICE_LIFETIME *lifetime, PHSWDEVICE hSwDevice
         return FALSE;
     }
 
-    BOOL created = TRUE;
-    if (FALSE == IsDeviceCreated(&created))
+    if (checkCreated == TRUE)
     {
-        return FALSE;
-    }
-    if (created == TRUE)
-    {
-        SetLastMsg("Device is already created, please destroy it first\n");
-        if (g_printMsg)
+        BOOL created = TRUE;
+        if (FALSE == IsDeviceCreated(&created))
         {
-            printf(g_lastMsg);
+            return FALSE;
         }
-        return FALSE;
+        if (created == TRUE)
+        {
+            SetLastMsg("Device is already created, please destroy it first\n");
+            if (g_printMsg)
+            {
+                printf(g_lastMsg);
+            }
+            return FALSE;
+        }
     }
 
     // create device
@@ -302,7 +311,37 @@ VOID DeviceClose(HSWDEVICE hSwDevice)
 
     if (hSwDevice != INVALID_HANDLE_VALUE && hSwDevice != NULL)
     {
+        HRESULT result = SwDeviceSetLifetime(hSwDevice, SWDeviceLifetimeHandle);
         SwDeviceClose(hSwDevice);
+    }
+    else
+    {
+        BOOL created = TRUE;
+        if (TRUE == IsDeviceCreated(&created))
+        {
+            if (created == FALSE)
+            {
+                return;
+            }
+        }
+        else
+        {
+            // Try crete sw device, and close
+        }
+
+        HSWDEVICE hSwDevice2 = NULL;
+        if (DeviceCreateWithLifetimeCheckCreated(FALSE, NULL, &hSwDevice2))
+        {
+            if (hSwDevice2 != NULL)
+            {
+                HRESULT result = SwDeviceSetLifetime(hSwDevice2, SWDeviceLifetimeHandle);
+                SwDeviceClose(hSwDevice2);
+            }
+        }
+        else
+        {
+            //
+        }
     }
 }
 
