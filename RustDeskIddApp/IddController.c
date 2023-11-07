@@ -103,7 +103,7 @@ BOOL InstallUpdate(LPCTSTR fullInfPath, PBOOL rebootRequired)
 
 BOOL Uninstall(LPCTSTR fullInfPath, PBOOL rebootRequired)
 {
-    SetLastMsg("Sucess");
+    SetLastMsg("Success");
 
     if (FALSE == DiUninstallDriver(
         NULL,
@@ -129,7 +129,7 @@ BOOL Uninstall(LPCTSTR fullInfPath, PBOOL rebootRequired)
 
 BOOL IsDeviceCreated(PBOOL created)
 {
-    SetLastMsg("Sucess");
+    SetLastMsg("Success");
 
     HDEVINFO hardwareDeviceInfo = SetupDiGetClassDevs(
         &GUID_DEVINTERFACE_IDD_DRIVER_DEVICE,
@@ -193,7 +193,7 @@ BOOL DeviceCreate(PHSWDEVICE hSwDevice)
 
 BOOL DeviceCreateWithLifetime(SW_DEVICE_LIFETIME *lifetime, PHSWDEVICE hSwDevice)
 {
-    SetLastMsg("Sucess");
+    SetLastMsg("Success");
 
     if (*hSwDevice != NULL)
     {
@@ -291,7 +291,7 @@ BOOL DeviceCreateWithLifetime(SW_DEVICE_LIFETIME *lifetime, PHSWDEVICE hSwDevice
 
 VOID DeviceClose(HSWDEVICE hSwDevice)
 {
-    SetLastMsg("Sucess");
+    SetLastMsg("Success");
 
     if (hSwDevice != INVALID_HANDLE_VALUE && hSwDevice != NULL)
     {
@@ -331,7 +331,7 @@ VOID DeviceClose(HSWDEVICE hSwDevice)
 
 BOOL MonitorPlugIn(UINT index, UINT edid, INT retries)
 {
-    SetLastMsg("Sucess");
+    SetLastMsg("Success");
 
     if (retries < 0)
     {
@@ -406,7 +406,7 @@ BOOL MonitorPlugIn(UINT index, UINT edid, INT retries)
 
 BOOL MonitorPlugOut(UINT index)
 {
-    SetLastMsg("Sucess");
+    SetLastMsg("Success");
 
     HANDLE hDevice = DeviceOpenHandle();
     if (hDevice == INVALID_HANDLE_VALUE || hDevice == NULL)
@@ -447,7 +447,7 @@ BOOL MonitorPlugOut(UINT index)
 
 BOOL MonitorModesUpdate(UINT index, UINT modeCount, PMonitorMode modes)
 {
-    SetLastMsg("Sucess");
+    SetLastMsg("Success");
 
     HANDLE hDevice = DeviceOpenHandle();
     if (hDevice == INVALID_HANDLE_VALUE || hDevice == NULL)
@@ -789,7 +789,7 @@ Clean0:
 // https://stackoverflow.com/questions/67164846/createfile-fails-unless-i-disable-enable-my-device
 HANDLE DeviceOpenHandle()
 {
-    SetLastMsg("Sucess");
+    SetLastMsg("Success");
 
     // const int maxDevPathLen = 256;
     TCHAR devicePath[256] = { 0 };
