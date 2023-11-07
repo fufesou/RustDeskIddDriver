@@ -1,4 +1,5 @@
 #include "./IddController.h"
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <newdev.h>
@@ -9,6 +10,12 @@
 
 #include "../RustDeskIddDriver/Public.h"
 
+typedef struct DeviceCreateCallbackContext
+{
+    HANDLE hEvent;
+    SW_DEVICE_LIFETIME* lifetime;
+    HRESULT hrCreateResult;
+} DeviceCreateCallbackContext;
 
 const GUID GUID_DEVINTERFACE_IDD_DRIVER_DEVICE = \
 { 0x781EF630, 0x72B2, 0x11d2, { 0xB8, 0x52,  0x00,  0xC0,  0x4E,  0xAF,  0x52,  0x72 } };
@@ -66,7 +73,7 @@ const char* GetLastMsg()
 
 BOOL InstallUpdate(LPCTSTR fullInfPath, PBOOL rebootRequired)
 {
-    SetLastMsg("Sucess");
+    SetLastMsg("Success");
 
     // UpdateDriverForPlugAndPlayDevices may return FALSE while driver was successfully installed...
     if (FALSE == UpdateDriverForPlugAndPlayDevices(
@@ -181,6 +188,11 @@ BOOL IsDeviceCreated(PBOOL created)
 
 BOOL DeviceCreate(PHSWDEVICE hSwDevice)
 {
+    return DeviceCreateWithLifetime(SWDeviceLifetimeHandle, NULL);
+}
+
+BOOL DeviceCreateWithLifetime(SW_DEVICE_LIFETIME *lifetime, PHSWDEVICE hSwDevice)
+{
     SetLastMsg("Sucess");
 
     if (*hSwDevice != NULL)
@@ -218,6 +230,8 @@ BOOL DeviceCreate(PHSWDEVICE hSwDevice)
         return FALSE;
     }
 
+    DeviceCreateCallbackContext callbackContex = { hEvent, lifetime, E_FAIL, };
+
     SW_DEVICE_CREATE_INFO createInfo = { 0 };
     PCWSTR description = L"RustDesk Idd Driver";
 
@@ -243,7 +257,7 @@ BOOL DeviceCreate(PHSWDEVICE hSwDevice)
         0,
         NULL,
         CreationCallback,
-        &hEvent,
+        &callbackContex,
         hSwDevice);
     if (FAILED(hr))
     {
@@ -259,6 +273,7 @@ BOOL DeviceCreate(PHSWDEVICE hSwDevice)
     // Wait for callback to signal that the device has been created
     printf("Waiting for device to be created....\n");
     DWORD waitResult = WaitForSingleObject(hEvent, 10 * 1000);
+    CloseHandle(hEvent);
     if (waitResult != WAIT_OBJECT_0)
     {
         SetLastMsg("Wait for device creation failed 0x%d\n", waitResult);
@@ -268,8 +283,17 @@ BOOL DeviceCreate(PHSWDEVICE hSwDevice)
         }
         return FALSE;
     }
-    // printf("Device created\n\n");
-    return TRUE;
+
+    if (SUCCEEDED(callbackContex.hrCreateResult))
+    {
+        // printf("Device created\n\n");
+        return TRUE;
+    }
+    else
+    {
+        SetLastMsg("SwDeviceCreate failed, hrCreateResult 0x%lx\n", callbackContex.hrCreateResult);
+        return FALSE;
+    }
 }
 
 VOID DeviceClose(HSWDEVICE hSwDevice)
@@ -466,11 +490,32 @@ CreationCallback(
     _In_opt_ PCWSTR pszDeviceInstanceId
 )
 {
-    HANDLE hEvent = *(HANDLE*)pContext;
+    DeviceCreateCallbackContext* callbackContext = NULL;
 
-    SetEvent(hEvent);
-    UNREFERENCED_PARAMETER(hSwDevice);
-    UNREFERENCED_PARAMETER(hrCreateResult);
+    assert(pContext != NULL);
+    if (pContext != NULL)
+    {
+        callbackContext = (DeviceCreateCallbackContext*)pContext;
+        callbackContext->hrCreateResult = hrCreateResult;
+        if (SUCCEEDED(hrCreateResult))
+        {
+            if (callbackContext->lifetime)
+            {
+                HRESULT result = SwDeviceSetLifetime(hSwDevice, *callbackContext->lifetime);
+                if (FAILED(result))
+                {
+                    // TODO: debug log error here
+                }
+            }
+        }
+
+        assert(callbackContext->hEvent != NULL);
+        if (callbackContext->hEvent != NULL)
+        {
+            SetEvent(callbackContext->hEvent);
+        }
+    }
+
     // printf("Idd device %ls created\n", pszDeviceInstanceId);
 }
 

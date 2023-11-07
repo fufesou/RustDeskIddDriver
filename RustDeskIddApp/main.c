@@ -27,12 +27,14 @@ int prompt_input()
 {
     printf("Press  key                  execute:\n");
     printf("       1. 'q'               1. quit\n");
-    printf("       2. 'c'               2. create device\n");
-    printf("       3. 'd'               3. destroy device\n");
-    printf("       4. 'i'               4. install or update driver\n");
-    printf("       5. 'u'               5. uninstall driver\n");
-    printf("       6. 'a'               6. plug in monitor\n");
-    printf("       7. 'b'               7. plug out monitor\n");
+    printf("       2. 'c'               2. create software device with lifetime \"SWDeviceLifetimeHandle\"\n");
+    printf("       3. 'C'               3. create software device with lifetime \"SWDeviceLifetimeParentPresent\"\n");
+    printf("       4. 'd'               4. destroy software device\n");
+    printf("       5. 'i'               5. install or update driver\n");
+    printf("       6. 'u'               6. uninstall driver\n");
+    printf("       7. 'a'               7. plug in monitor\n");
+    printf("       8. 'b'               8. plug out monitor\n");
+
     return _getch();
 }
 
@@ -40,6 +42,8 @@ int __cdecl main(int argc, char* argv[])
 {
     HSWDEVICE hSwDevice = NULL;
     BOOL bExit = FALSE;
+    HRESULT result = E_FAIL;
+    SW_DEVICE_LIFETIME lifetime = SWDeviceLifetimeHandle;
 
     DWORD width = 1920;
     DWORD height = 1080;
@@ -84,16 +88,22 @@ int __cdecl main(int argc, char* argv[])
             }
             break;
         case 'c':
+        case 'C':
+            lifetime = key == 'c' ? SWDeviceLifetimeHandle : SWDeviceLifetimeParentPresent;
             printf("Create device begin\n");
             if (hSwDevice != NULL)
             {
                 printf("Device created before\n");
                 break;
             }
-            if (FALSE == DeviceCreate(&hSwDevice))
+            if (FALSE == DeviceCreateWithLifetime(&lifetime, &hSwDevice))
             {
                 printf(GetLastMsg());
-                DeviceClose(hSwDevice);
+                if (hSwDevice != NULL)
+                {
+                    result = SwDeviceSetLifetime(hSwDevice, SWDeviceLifetimeHandle);
+                    DeviceClose(hSwDevice);
+                }
                 hSwDevice = NULL;
             }
             else
@@ -103,7 +113,11 @@ int __cdecl main(int argc, char* argv[])
             break;
         case 'd':
             printf("Close device begin\n");
-            DeviceClose(hSwDevice);
+            if (hSwDevice != NULL)
+            {
+                result = SwDeviceSetLifetime(hSwDevice, SWDeviceLifetimeHandle);
+                DeviceClose(hSwDevice);
+            }
             hSwDevice = NULL;
             printf("Close device done\n");
             break;
