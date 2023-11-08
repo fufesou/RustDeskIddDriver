@@ -223,7 +223,7 @@ BOOL DeviceCreateWithLifetime(SW_DEVICE_LIFETIME *lifetime, PHSWDEVICE hSwDevice
         return FALSE;
     }
 
-    DeviceCreateCallbackContext callbackContex = { hEvent, lifetime, E_FAIL, };
+    DeviceCreateCallbackContext callbackContext = { hEvent, lifetime, E_FAIL, };
 
     SW_DEVICE_CREATE_INFO createInfo = { 0 };
     PCWSTR description = L"RustDesk Idd Driver";
@@ -250,7 +250,7 @@ BOOL DeviceCreateWithLifetime(SW_DEVICE_LIFETIME *lifetime, PHSWDEVICE hSwDevice
         0,
         NULL,
         CreationCallback,
-        &callbackContex,
+        &callbackContext,
         hSwDevice);
     if (FAILED(hr))
     {
@@ -277,14 +277,14 @@ BOOL DeviceCreateWithLifetime(SW_DEVICE_LIFETIME *lifetime, PHSWDEVICE hSwDevice
         return FALSE;
     }
 
-    if (SUCCEEDED(callbackContex.hrCreateResult))
+    if (SUCCEEDED(callbackContext.hrCreateResult))
     {
         // printf("Device created\n\n");
         return TRUE;
     }
     else
     {
-        SetLastMsg("SwDeviceCreate failed, hrCreateResult 0x%lx\n", callbackContex.hrCreateResult);
+        SetLastMsg("SwDeviceCreate failed, hrCreateResult 0x%lx\n", callbackContext.hrCreateResult);
         return FALSE;
     }
 }
