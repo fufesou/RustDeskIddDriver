@@ -268,7 +268,7 @@ NTSTATUS IddRustDeskDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 
     // If the driver wishes to handle custom IoDeviceControl requests, it's necessary to use this callback since IddCx
     // redirects IoDeviceControl requests to an internal queue. This sample does not need this.
-    // https://docs.microsoft.com/zh-cn/windows-hardware/drivers/display/iddcx-objects
+    // https://docs.microsoft.com/en-us/windows-hardware/drivers/display/iddcx-objects
     IddConfig.EvtIddCxDeviceIoControl = IddRustDeskIoDeviceControl;
 
     IddConfig.EvtIddCxAdapterInitFinished = IddRustDeskAdapterInitFinished;
