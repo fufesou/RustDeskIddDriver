@@ -222,7 +222,8 @@ BOOL IsDeviceCreated(PBOOL created)
 
 BOOL DeviceCreate(PHSWDEVICE hSwDevice)
 {
-    return DeviceCreateWithLifetime(SWDeviceLifetimeHandle, NULL);
+    SW_DEVICE_LIFETIME lifetime = SWDeviceLifetimeHandle;
+    return DeviceCreateWithLifetime(&lifetime, hSwDevice);
 }
 
 BOOL DeviceCreateWithLifetime(SW_DEVICE_LIFETIME *lifetime, PHSWDEVICE hSwDevice)
@@ -231,7 +232,7 @@ BOOL DeviceCreateWithLifetime(SW_DEVICE_LIFETIME *lifetime, PHSWDEVICE hSwDevice
 
     if (*hSwDevice != NULL)
     {
-        SetLastMsg("Device handler is not NULL\n");
+        SetLastMsg("Device handle is not NULL\n");
         return FALSE;
     }
 
