@@ -23,6 +23,7 @@ jobs:
           platform: [x64]
     env:
       Dist_Dir: RustDeskIddDriver_${{ matrix.platform }}
+      Dist_File: RustDeskIddDriver_${{ matrix.platform }}.zip
       Driver_Output_Dir: ./RustDeskIddDriver/${{ matrix.platform }}/${{ matrix.configuration }}
       App_Output_Dir: ./RustDeskIddApp/${{ matrix.platform }}/${{ matrix.configuration }}
       Configuration: ${{ matrix.configuration }}
@@ -72,12 +73,13 @@ jobs:
           mv ./${{ env.Driver_Output_Dir }}/RustDeskIddDriver ${{ env.Dist_Dir }}
           mv ./${{ env.App_Output_Dir }}/RustDeskIddApp.exe ${{ env.Dist_Dir }}
           mv ./RustDeskIddApp/README.md ${{ env.Dist_Dir }}
-          Compress-Archive -Path ${{ env.Dist_Dir }}/* -Destination ${{ env.Dist_Dir }}.zip
-          md5sum ${{ env.Dist_Dir }}.zip > ${{ env.Dist_Dir }}.zip.checksum_md5
+          sha256sum ${{ env.Dist_Dir }}/*
+          sha256sum ${{ env.Dist_Dir }}/RustDeskIddDriver/*
+          Compress-Archive -Path ${{ env.Dist_Dir }}/* -Destination ${{ env.Dist_File }}
+          md5sum ${{ env.Dist_Dir }}.zip | tee ${{ env.Dist_File }}.checksum_md5
+          sha256sum ${{ env.Dist_Dir }}.zip | tee  ${{ env.Dist_File }}.checksum_sha256
 
       - name: Publish Release
-        env:
-          DIST_FILE: RustDeskIddDriver_${{ matrix.platform }}.zip
         uses: softprops/action-gh-release@v1
         if: always()
         with:
@@ -86,3 +88,4 @@ jobs:
           files: |
             ${{ env.DIST_FILE }}
             ${{ env.DIST_FILE }}.checksum_md5
+            ${{ env.DIST_FILE }}.checksum_sha256
