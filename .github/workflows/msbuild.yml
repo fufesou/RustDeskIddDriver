@@ -1,0 +1,42 @@
+name: Build driver solution
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+        platform: [x64]
+    runs-on: windows-2022
+    env:
+      Solution_Path: RustDeskIddDriver.sln
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v1.0.2
+
+      - name: Build solution
+        run: |
+          msbuild ${{ env.Solution_Path }} -p:Configuration:${{ env.Configuration }} -p:Platform:${{ env.Platform }}
+        env:
+          Configuration: ${{ matrix.configuration }}
+          Platform: ${{ matrix.platform }}
+
+      - name: Zip files
+        run: |
+          Add-Type -A 'System.IO.Compression.FileSystem'
+          [System.IO.Compression.ZipFile]::CreateFromDirectory('./x64/bin/${{ matrix.configuration }}/${{ matrix.platform }}/RustDeskIddDriver', 'RustDeskIddDriver-${{ matrix.configuration }}-${{ matrix.platform }}.zip')
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v1
+        if: always()
+        with:
+          prerelease: true
+          tag_name: build github ci
+          files: |
+            ./RustDeskIddDriver-${{ matrix.configuration }}-${{ matrix.platform }}.zip
