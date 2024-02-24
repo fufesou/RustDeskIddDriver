@@ -2,6 +2,9 @@ name: build sign off
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   run-flutter-nightly-build:
