@@ -7,10 +7,6 @@ on:
         type: string
         default: "Test Sign"
 
-  push:
-    branches:
-      - main
-
 env:
   Solution_Path: RustDeskIddDriver.sln
   Project_Driver: ./RustDeskIddDriver/RustDeskIddDriver.vcxproj
