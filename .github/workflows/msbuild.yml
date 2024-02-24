@@ -1,23 +1,30 @@
-name: Build driver solution
+name: Build driver
+
 on:
-  schedule:
-      # schedule build every night
-      - cron: "0 0 * * *"
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      sign-mode:
+        type: string
+        default: "Test Sign"
 
   push:
     branches:
       - main
 
+env:
+  Solution_Path: RustDeskIddDriver.sln
+  Project_Driver: ./RustDeskIddDriver/RustDeskIddDriver.vcxproj
+  Project_App: ./RustDeskIddApp/RustDeskIddApp.vcxproj
+
 jobs:
-  build:
+  build-windows-test-sign:
+    runs-on: ${{ matrix.target }}
     strategy:
-      matrix:
-        configuration: [Release]
-        platform: [x64]
-    runs-on: windows-2022
-    env:
-      Solution_Path: RustDeskIddDriver.sln
+        fail-fast: false
+        matrix:
+          target: [windows-2022]
+          configuration: [Release]
+          platform: [x64]
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
@@ -25,14 +32,30 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v1.0.2
 
-      - name: Build solution
+      - name: Build driver
         run: |
-          set MSBuildUserExtensionsPath=%VSINSTALLDIR%\MsBuild
-          msbuild ${{ env.Solution_Path }} -p:Configuration=${{ env.Configuration }} -p:Platform=${{ env.Platform }} /p:TargetVersion=Windows10
+          msbuild ${{ env.Project_Driver }} -p:Configuration=${{ env.Configuration }} -p:Platform=${{ env.Platform }} /p:TargetVersion=Windows10 /p:SignMode="${{ inputs.sign-mode }}"
         env:
           Configuration: ${{ matrix.configuration }}
           Platform: ${{ matrix.platform }}
 
+      - name: Build demo app
+        run: |
+          msbuild ${{ env.Project_App }} -p:Configuration=${{ env.Configuration }} -p:Platform=${{ env.Platform }} /p:TargetVersion=Windows10
+        env:
+          Configuration: ${{ matrix.configuration }}
+          Platform: ${{ matrix.platform }}
+
+  publish-release:
+    runs-on: ${{ matrix.target }}
+    needs: build-windows-test-sign
+    strategy:
+        fail-fast: false
+        matrix:
+          target: [windows-2022]
+          configuration: [Release]
+          platform: [x64]
+    steps:
       - name: Zip files
         env:
           DIST_DIR: RustDeskIddDriver_${{ matrix.platform }}
