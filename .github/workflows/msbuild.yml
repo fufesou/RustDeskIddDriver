@@ -25,6 +25,10 @@ jobs:
           target: [windows-2022]
           configuration: [Release]
           platform: [x64]
+    env:
+      Dist_Dir: RustDeskIddDriver_${{ matrix.platform }}
+      Driver_Output_Dir: ./RustDeskIddDriver/${{ matrix.platform }}/${{ matrix.configuration }}
+      App_Output_Dir: ./RustDeskIddApp/${{ matrix.platform }}/${{ matrix.configuration }}
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
@@ -46,17 +50,30 @@ jobs:
           Configuration: ${{ matrix.configuration }}
           Platform: ${{ matrix.platform }}
 
-      - name: Zip files
-        env:
-          DIST_DIR: RustDeskIddDriver_${{ matrix.platform }}
+    #   - name: Sign driver
+    #     uses: GermanBluefox/code-sign-action@v7
+    #     if: inputs.sign-mode == 'off'
+    #     with:
+    #       certificate: '${{ secrets.WINDOWS_PFX_BASE64 }}'
+    #       password: '${{ secrets.WINDOWS_PFX_PASSWORD }}'
+    #       certificatesha1: '${{ secrets.WINDOWS_PFX_SHA1_THUMBPRINT }}'
+    #       folder: ./RustDeskIddDriver/${{ matrix.platform }}/${{ matrix.configuration }}
+    #       recursive: false
+
+      - name: Copy cert file if test sign
+        if: inputs.sign-mode == 'Test Sign'
         run: |
-          mkdir -p ${{ env.DIST_DIR }}
-          mv ./${{ matrix.platform }}/${{ matrix.configuration }}/RustDeskIddDriver ${{ env.DIST_DIR }}
-          mv ./${{ matrix.platform }}/${{ matrix.configuration }}/RustDeskIddDriver.cer ${{ env.DIST_DIR }}
-          mv ./${{ matrix.platform }}/${{ matrix.configuration }}/RustDeskIddApp.exe ${{ env.DIST_DIR }}
-          mv ./RustDeskIddApp/README.md ${{ env.DIST_DIR }}
-          Compress-Archive -Path ${{ env.DIST_DIR }}/* -Destination ${{ env.DIST_DIR }}.zip
-          md5sum ${{ env.DIST_DIR }}.zip > ${{ env.DIST_DIR }}.zip.checksum_md5
+          mkdir -p ${{ env.Dist_Dir }} > NUL
+          mv ./${{ env.Driver_Output_Dir }}/RustDeskIddDriver.cer ${{ env.Dist_Dir }}
+
+      - name: Zip files
+        run: |
+          mkdir -p ${{ env.Dist_Dir }} > NUL
+          mv ./${{ env.Driver_Output_Dir }}/RustDeskIddDriver ${{ env.Dist_Dir }}
+          mv ./${{ env.App_Output_Dir }}/RustDeskIddApp.exe ${{ env.Dist_Dir }}
+          mv ./RustDeskIddApp/README.md ${{ env.Dist_Dir }}
+          Compress-Archive -Path ${{ env.Dist_Dir }}/* -Destination ${{ env.Dist_Dir }}.zip
+          md5sum ${{ env.Dist_Dir }}.zip > ${{ env.Dist_Dir }}.zip.checksum_md5
 
       - name: Publish Release
         env:
