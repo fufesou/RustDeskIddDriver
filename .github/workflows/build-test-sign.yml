@@ -1,4 +1,4 @@
-name: build test sign
+name: Build test sign
 
 on:
   workflow_dispatch:

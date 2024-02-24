@@ -1,4 +1,4 @@
-name: build sign off
+name: Build sign off
 
 on:
   workflow_dispatch:
