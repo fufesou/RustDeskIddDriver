@@ -11,3 +11,4 @@ jobs:
     uses: ./.github/workflows/msbuild.yml
     with:
       sign-mode: "Test Sign"
+      upload-tag: "build_github_ci_test_sign"

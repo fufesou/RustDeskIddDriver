@@ -6,6 +6,6 @@ on:
 jobs:
   run-flutter-nightly-build:
     uses: ./.github/workflows/msbuild.yml
-    secrets: inherit
     with:
       sign-mode: "off"
+      upload-tag: "build_github_ci_sign_off"

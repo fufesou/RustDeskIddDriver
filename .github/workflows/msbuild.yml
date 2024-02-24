@@ -6,6 +6,9 @@ on:
       sign-mode:
         type: string
         default: "Test Sign"
+      upload-tag:
+          type: string
+          default: "build_github_ci_test_sign"
 
 env:
   Solution_Path: RustDeskIddDriver.sln
@@ -83,7 +86,7 @@ jobs:
         if: always()
         with:
           prerelease: true
-          tag_name: build_github_ci
+          tag_name: ${{ inputs.upload-tag }}
           files: |
             ${{ env.DIST_FILE }}
             ${{ env.DIST_FILE }}.checksum_md5
