@@ -29,6 +29,8 @@ jobs:
       Dist_Dir: RustDeskIddDriver_${{ matrix.platform }}
       Driver_Output_Dir: ./RustDeskIddDriver/${{ matrix.platform }}/${{ matrix.configuration }}
       App_Output_Dir: ./RustDeskIddApp/${{ matrix.platform }}/${{ matrix.configuration }}
+      Configuration: ${{ matrix.configuration }}
+      Platform: ${{ matrix.platform }}
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
@@ -36,19 +38,19 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v1.0.2
 
-      - name: Build driver
+      - name: Try build driver test sign
+        if: inputs.sign-mode == 'Test Sign'
         run: |
-          msbuild ${{ env.Project_Driver }} -p:Configuration=${{ env.Configuration }} -p:Platform=${{ env.Platform }} /p:TargetVersion=Windows10 /p:SignMode="${{ inputs.sign-mode }}"
-        env:
-          Configuration: ${{ matrix.configuration }}
-          Platform: ${{ matrix.platform }}
+          msbuild ${{ env.Project_Driver }} -p:Configuration=${{ env.Configuration }} -p:Platform=${{ env.Platform }} /p:TargetVersion=Windows10
+
+      - name: Try build driver sign off
+        if: inputs.sign-mode == 'off'
+        run: |
+          msbuild ${{ env.Project_Driver }} -p:Configuration=${{ env.Configuration }} -p:Platform=${{ env.Platform }} /p:TargetVersion=Windows10 /p:SignMode=off
 
       - name: Build demo app
         run: |
           msbuild ${{ env.Project_App }} -p:Configuration=${{ env.Configuration }} -p:Platform=${{ env.Platform }} /p:TargetVersion=Windows10
-        env:
-          Configuration: ${{ matrix.configuration }}
-          Platform: ${{ matrix.platform }}
 
     #   - name: Sign driver
     #     uses: GermanBluefox/code-sign-action@v7
@@ -60,15 +62,17 @@ jobs:
     #       folder: ./RustDeskIddDriver/${{ matrix.platform }}/${{ matrix.configuration }}
     #       recursive: false
 
+      - name: Create dist dir
+        run: |
+          mkdir -p ${{ env.Dist_Dir }}
+
       - name: Copy cert file if test sign
         if: inputs.sign-mode == 'Test Sign'
         run: |
-          mkdir -p ${{ env.Dist_Dir }} > NUL
           mv ./${{ env.Driver_Output_Dir }}/RustDeskIddDriver.cer ${{ env.Dist_Dir }}
 
       - name: Zip files
         run: |
-          mkdir -p ${{ env.Dist_Dir }} > NUL
           mv ./${{ env.Driver_Output_Dir }}/RustDeskIddDriver ${{ env.Dist_Dir }}
           mv ./${{ env.App_Output_Dir }}/RustDeskIddApp.exe ${{ env.Dist_Dir }}
           mv ./RustDeskIddApp/README.md ${{ env.Dist_Dir }}
