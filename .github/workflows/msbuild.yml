@@ -46,16 +46,6 @@ jobs:
           Configuration: ${{ matrix.configuration }}
           Platform: ${{ matrix.platform }}
 
-  publish-release:
-    runs-on: ${{ matrix.target }}
-    needs: build-windows-test-sign
-    strategy:
-        fail-fast: false
-        matrix:
-          target: [windows-2022]
-          configuration: [Release]
-          platform: [x64]
-    steps:
       - name: Zip files
         env:
           DIST_DIR: RustDeskIddDriver_${{ matrix.platform }}
