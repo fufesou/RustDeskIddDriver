@@ -73,11 +73,10 @@ jobs:
           mv ./${{ env.Driver_Output_Dir }}/RustDeskIddDriver ${{ env.Dist_Dir }}
           mv ./${{ env.App_Output_Dir }}/RustDeskIddApp.exe ${{ env.Dist_Dir }}
           mv ./RustDeskIddApp/README.md ${{ env.Dist_Dir }}
-          sha256sum ${{ env.Dist_Dir }}/*
-          sha256sum ${{ env.Dist_Dir }}/RustDeskIddDriver/*
+          Get-ChildItem ${{ env.Dist_Dir }} -Recurse -File | ForEach-Object {$filePath = $_.FullName; Write-Output "$($(Get-FileHash -Algorithm SHA256 -Path $filePath).Hash) $filePath" }
           Compress-Archive -Path ${{ env.Dist_Dir }}/* -Destination ${{ env.Dist_File }}
-          md5sum ${{ env.Dist_Dir }}.zip | tee ${{ env.Dist_File }}.checksum_md5
-          sha256sum ${{ env.Dist_Dir }}.zip | tee  ${{ env.Dist_File }}.checksum_sha256
+          md5sum ${{ env.Dist_File }} | tee ${{ env.Dist_File }}.checksum_md5
+          sha256sum ${{ env.Dist_File }} | tee  ${{ env.Dist_File }}.checksum_sha256
 
       - name: Publish Release
         uses: softprops/action-gh-release@v1
