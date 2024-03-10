@@ -76,6 +76,12 @@ jobs:
           mv ./${{ env.Driver_Output_Dir }}/RustDeskIddDriver ${{ env.Dist_Dir }}
           mv ./${{ env.App_Output_Dir }}/RustDeskIddApp.exe ${{ env.Dist_Dir }}
           mv ./RustDeskIddApp/README.md ${{ env.Dist_Dir }}
+
+          $vcruntime140 = vswhere -latest -requires Microsoft.Component.MSBuild -find VC\Tools\**\bin\HostX64\x64\vcruntime140.dll
+          copy $vcruntime140[-1] ${{ env.dist_dir }}
+          $installPath = vswhere -latest -requires Microsoft.Component.MSBuild -property installationPath
+          copy $installPath/Common7/IDE/ucrtbase.dll ${{ env.dist_dir }}
+
           Get-ChildItem ${{ env.Dist_Dir }} -Recurse -File | ForEach-Object {$filePath = $_.FullName; Write-Output "$($(Get-FileHash -Algorithm SHA256 -Path $filePath).Hash) $filePath" }
           Compress-Archive -Path ${{ env.Dist_Dir }}/* -Destination ${{ env.Dist_File }}
           md5sum ${{ env.Dist_File }} | tee ${{ env.Dist_File }}.checksum_md5
