@@ -22,6 +22,8 @@
 #pragma comment(lib, "Setupapi.lib")
 #pragma comment(lib, "Newdev.lib")
 
+#define MAX_MONITOR_MODES 10
+
 
 int prompt_input()
 {
@@ -34,6 +36,7 @@ int prompt_input()
     printf("       6. 'u'               6. uninstall driver\n");
     printf("       7. 'a'               7. plug in monitor\n");
     printf("       8. 'b'               8. plug out monitor\n");
+    printf("       9. 'm'               9. update monitor modes\n");
 
     return _getch();
 }
@@ -146,6 +149,56 @@ int __cdecl main(int argc, char* argv[])
             {
                 index -= 1;
                 printf("Plug out monitor done\n");
+            }
+            break;
+        case 'm':
+            printf("Update monitor modes, current max index %u\n", index - 1);
+            printf("Please select the monitor from 0 to %d\n", index - 1);
+            UINT i = 0;
+            scanf_s("%d%*c", &i);
+            if (i >= index) {
+                fprintf(stderr, "Please select index less equal to %d, your input is %d\n", index - 1, i);
+            }
+            else {
+                printf("\nYou have selected %d monitor to update modes.\n", i);
+                printf("Please add at lease one monitor mode, format: width, height, refresh frequency.\nThe max number of modes is %d.\nPress e to end input.\n", MAX_MONITOR_MODES);
+
+                int input_ok = 0;
+                int k = 0;
+                MonitorMode modes[MAX_MONITOR_MODES] = { {0, 0, 0}, };
+                while (1) {
+                    char input[100];
+                    if (fgets(input, sizeof(input), stdin) != NULL) {
+                        if (input[0] == 'e') {
+                            input_ok = 1;
+                            break;
+                        }
+                        else {
+                            sscanf_s(input, "%d,%d,%d", &modes[k].width, &modes[k].height, &modes[k].sync);
+                        }
+                    }
+                    else {
+                        fprintf(stderr, "Something is wrong while tring to read the input. Please try again\n");
+                        break;
+                    }
+                    ++k;
+                    if (k == sizeof(modes) / sizeof(modes[0])) {
+                        input_ok = 1;
+                        break;
+                    }
+                }
+
+                if (input_ok == 1) {
+                    if (k == 0) {
+                        fprintf(stderr, "No monitor modes are added, skip.\n");
+                    }
+                    else {
+                        if (FALSE == MonitorModesUpdate(i, k, modes))
+                        {
+                            printf(GetLastMsg());
+                        }
+                    }
+                }
             }
             break;
         case 'q':
