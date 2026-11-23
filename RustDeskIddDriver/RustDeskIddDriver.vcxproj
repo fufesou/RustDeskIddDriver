@@ -35,9 +35,30 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="AdvancedColor.cpp" />
+    <ClCompile Include="ColorState.cpp" />
+    <ClCompile Include="CursorState.cpp" />
+    <ClCompile Include="DeviceControl.cpp" />
+    <ClCompile Include="DisplayModes.cpp" />
+    <ClCompile Include="HardwareCursor.cpp" />
+    <ClCompile Include="MonitorDevice.cpp" />
+    <ClCompile Include="GeneratedEdid.cpp" />
+    <ClCompile Include="MonitorProfile.cpp" />
+    <ClCompile Include="SwapChain.cpp" />
     <ClCompile Include="Driver.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AdvancedColor.h" />
+    <ClInclude Include="BaseEdidTimings.h" />
+    <ClInclude Include="DmtTimings.h" />
+    <ClInclude Include="CursorState.h" />
+    <ClInclude Include="CtaVideoTimings.h" />
+    <ClInclude Include="DisplayProfile.h" />
+    <ClInclude Include="EdidTiming.h" />
+    <ClInclude Include="DescriptorTimings.h" />
+    <ClInclude Include="SignalTiming.h" />
+    <ClInclude Include="MonitorProfile.h" />
+    <ClInclude Include="ProfileValidation.h" />
     <ClInclude Include="Driver.h" />
     <ClInclude Include="Public.h" />
     <ClInclude Include="Trace.h" />
@@ -102,7 +123,6 @@
     <UMDF_VERSION_MINOR>25</UMDF_VERSION_MINOR>
     <IndirectDisplayDriver>true</IndirectDisplayDriver>
     <IDDCX_VERSION_MAJOR>1</IDDCX_VERSION_MAJOR>
-    <IDDCX_VERSION_MINOR>4</IDDCX_VERSION_MINOR>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -111,7 +131,6 @@
     <UMDF_VERSION_MINOR>25</UMDF_VERSION_MINOR>
     <IndirectDisplayDriver>true</IndirectDisplayDriver>
     <IDDCX_VERSION_MAJOR>1</IDDCX_VERSION_MAJOR>
-    <IDDCX_VERSION_MINOR>4</IDDCX_VERSION_MINOR>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -120,7 +139,6 @@
     <UMDF_VERSION_MINOR>25</UMDF_VERSION_MINOR>
     <IndirectDisplayDriver>true</IndirectDisplayDriver>
     <IDDCX_VERSION_MAJOR>1</IDDCX_VERSION_MAJOR>
-    <IDDCX_VERSION_MINOR>4</IDDCX_VERSION_MINOR>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
@@ -130,7 +148,6 @@
     <UMDF_VERSION_MINOR>25</UMDF_VERSION_MINOR>
     <IndirectDisplayDriver>true</IndirectDisplayDriver>
     <IDDCX_VERSION_MAJOR>1</IDDCX_VERSION_MAJOR>
-    <IDDCX_VERSION_MINOR>4</IDDCX_VERSION_MINOR>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -139,7 +156,6 @@
     <UMDF_VERSION_MINOR>25</UMDF_VERSION_MINOR>
     <IndirectDisplayDriver>true</IndirectDisplayDriver>
     <IDDCX_VERSION_MAJOR>1</IDDCX_VERSION_MAJOR>
-    <IDDCX_VERSION_MINOR>4</IDDCX_VERSION_MINOR>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -148,7 +164,6 @@
     <UMDF_VERSION_MINOR>25</UMDF_VERSION_MINOR>
     <IndirectDisplayDriver>true</IndirectDisplayDriver>
     <IDDCX_VERSION_MAJOR>1</IDDCX_VERSION_MAJOR>
-    <IDDCX_VERSION_MINOR>4</IDDCX_VERSION_MINOR>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -157,7 +172,6 @@
     <UMDF_VERSION_MINOR>25</UMDF_VERSION_MINOR>
     <IndirectDisplayDriver>true</IndirectDisplayDriver>
     <IDDCX_VERSION_MAJOR>1</IDDCX_VERSION_MAJOR>
-    <IDDCX_VERSION_MINOR>4</IDDCX_VERSION_MINOR>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
@@ -166,7 +180,13 @@
     <UMDF_VERSION_MINOR>25</UMDF_VERSION_MINOR>
     <IndirectDisplayDriver>true</IndirectDisplayDriver>
     <IDDCX_VERSION_MAJOR>1</IDDCX_VERSION_MAJOR>
-    <IDDCX_VERSION_MINOR>4</IDDCX_VERSION_MINOR>
+  </PropertyGroup>
+  <!-- Modern 64-bit builds target IddCx 1.10 with a 1.4 runtime floor.
+       The SDK/WDK on older build hosts can be selected with /p:IDDCX_VERSION_MINOR=4. -->
+  <PropertyGroup>
+    <IDDCX_VERSION_MINOR Condition="'$(Platform)' == 'x64' or '$(Platform)' == 'ARM64'">10</IDDCX_VERSION_MINOR>
+    <IDDCX_VERSION_MINOR Condition="'$(IDDCX_VERSION_MINOR)' == ''">4</IDDCX_VERSION_MINOR>
+    <IDDCX_MINIMUM_VERSION_REQUIRED>4</IDDCX_MINIMUM_VERSION_REQUIRED>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -215,7 +235,7 @@
       <WppScanConfigurationData Condition="'%(ClCompile.ScanConfigurationData)' == ''">trace.h</WppScanConfigurationData>
       <ExceptionHandling>Async</ExceptionHandling>
       <EnablePREfast>true</EnablePREfast>
-      <AdditionalOptions>/DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=6 /DIDDCX_MINIMUM_VERSION_REQUIRED=4 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=$(IDDCX_VERSION_MINOR) /DIDDCX_MINIMUM_VERSION_REQUIRED=$(IDDCX_MINIMUM_VERSION_REQUIRED) %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <AdditionalDependencies>%(AdditionalDependencies);OneCoreUAP.lib;avrt.lib</AdditionalDependencies>
@@ -231,7 +251,7 @@
       <WppScanConfigurationData Condition="'%(ClCompile.ScanConfigurationData)' == ''">trace.h</WppScanConfigurationData>
       <ExceptionHandling>Async</ExceptionHandling>
       <EnablePREfast>true</EnablePREfast>
-      <AdditionalOptions>/DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=6 /DIDDCX_MINIMUM_VERSION_REQUIRED=4 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=$(IDDCX_VERSION_MINOR) /DIDDCX_MINIMUM_VERSION_REQUIRED=$(IDDCX_MINIMUM_VERSION_REQUIRED) %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <AdditionalDependencies>%(AdditionalDependencies);OneCoreUAP.lib;avrt.lib</AdditionalDependencies>
@@ -248,7 +268,7 @@
       <ExceptionHandling>Async</ExceptionHandling>
       <EnablePREfast>true</EnablePREfast>
       <PreprocessorDefinitions>_WIN64;_AMD64_;AMD64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalOptions>/D_ATL_NO_WIN_SUPPORT /DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=6 /DIDDCX_MINIMUM_VERSION_REQUIRED=4 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/D_ATL_NO_WIN_SUPPORT /DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=$(IDDCX_VERSION_MINOR) /DIDDCX_MINIMUM_VERSION_REQUIRED=$(IDDCX_MINIMUM_VERSION_REQUIRED) %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <AdditionalDependencies>%(AdditionalDependencies);OneCoreUAP.lib;avrt.lib</AdditionalDependencies>
@@ -265,7 +285,7 @@
       <ExceptionHandling>Async</ExceptionHandling>
       <EnablePREfast>true</EnablePREfast>
       <PreprocessorDefinitions>_WIN64;_AMD64_;AMD64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalOptions>/D_ATL_NO_WIN_SUPPORT /DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=6 /DIDDCX_MINIMUM_VERSION_REQUIRED=4 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/D_ATL_NO_WIN_SUPPORT /DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=$(IDDCX_VERSION_MINOR) /DIDDCX_MINIMUM_VERSION_REQUIRED=$(IDDCX_MINIMUM_VERSION_REQUIRED) %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <AdditionalDependencies>%(AdditionalDependencies);OneCoreUAP.lib;avrt.lib</AdditionalDependencies>
@@ -282,7 +302,7 @@
       <WppScanConfigurationData Condition="'%(ClCompile.ScanConfigurationData)' == ''">trace.h</WppScanConfigurationData>
       <ExceptionHandling>Async</ExceptionHandling>
       <EnablePREfast>true</EnablePREfast>
-      <AdditionalOptions>/DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=6 /DIDDCX_MINIMUM_VERSION_REQUIRED=4 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=$(IDDCX_VERSION_MINOR) /DIDDCX_MINIMUM_VERSION_REQUIRED=$(IDDCX_MINIMUM_VERSION_REQUIRED) %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <AdditionalDependencies>%(AdditionalDependencies);OneCoreUAP.lib;avrt.lib</AdditionalDependencies>
@@ -295,7 +315,7 @@
       <WppScanConfigurationData Condition="'%(ClCompile.ScanConfigurationData)' == ''">trace.h</WppScanConfigurationData>
       <ExceptionHandling>Async</ExceptionHandling>
       <EnablePREfast>true</EnablePREfast>
-      <AdditionalOptions>/DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=6 /DIDDCX_MINIMUM_VERSION_REQUIRED=4 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=$(IDDCX_VERSION_MINOR) /DIDDCX_MINIMUM_VERSION_REQUIRED=$(IDDCX_MINIMUM_VERSION_REQUIRED) %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <AdditionalDependencies>%(AdditionalDependencies);OneCoreUAP.lib;avrt.lib</AdditionalDependencies>
@@ -308,7 +328,7 @@
       <WppScanConfigurationData Condition="'%(ClCompile.ScanConfigurationData)' == ''">trace.h</WppScanConfigurationData>
       <ExceptionHandling>Async</ExceptionHandling>
       <EnablePREfast>true</EnablePREfast>
-      <AdditionalOptions>/DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=6 /DIDDCX_MINIMUM_VERSION_REQUIRED=4 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=$(IDDCX_VERSION_MINOR) /DIDDCX_MINIMUM_VERSION_REQUIRED=$(IDDCX_MINIMUM_VERSION_REQUIRED) %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <AdditionalDependencies>%(AdditionalDependencies);OneCoreUAP.lib;avrt.lib</AdditionalDependencies>
@@ -321,7 +341,7 @@
       <WppScanConfigurationData Condition="'%(ClCompile.ScanConfigurationData)' == ''">trace.h</WppScanConfigurationData>
       <ExceptionHandling>Async</ExceptionHandling>
       <EnablePREfast>true</EnablePREfast>
-      <AdditionalOptions>/DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=6 /DIDDCX_MINIMUM_VERSION_REQUIRED=4 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/DUMDF_DRIVER /DIDDCX_VERSION_MAJOR=1 /DIDDCX_VERSION_MINOR=$(IDDCX_VERSION_MINOR) /DIDDCX_MINIMUM_VERSION_REQUIRED=$(IDDCX_MINIMUM_VERSION_REQUIRED) %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <AdditionalDependencies>%(AdditionalDependencies);OneCoreUAP.lib;avrt.lib</AdditionalDependencies>

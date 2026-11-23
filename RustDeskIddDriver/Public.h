@@ -1,6 +1,7 @@
 #pragma once
 
 #include <minwindef.h>
+#include <stddef.h>
 #include <winioctl.h>
 #include <guiddef.h>
 
@@ -51,5 +52,15 @@ typedef struct _CtlMonitorModes {
 } CtlMonitorModes, *PCtlMonitorModes;
 
 
+static __inline DWORD CtlModeRequestBytes(UINT count)
+{
+    const DWORD prefix = (DWORD)offsetof(CtlMonitorModes, Modes);
+    const DWORD item = sizeof(((PCtlMonitorModes)0)->Modes[0]);
+    if (!count || count > (MAXDWORD - prefix) / item) return 0;
+    return prefix + count * item;
+}
+
 #define SYMBOLIC_LINK_NAME L"\\Device\\RustDeskIddDriver"
+
+#include "DisplayProfile.h"
 

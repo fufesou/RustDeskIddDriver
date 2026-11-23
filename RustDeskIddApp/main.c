@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <conio.h>
 #include <tchar.h>
 
@@ -24,6 +25,75 @@
 
 #define MAX_MONITOR_MODES 10
 
+typedef struct {
+    SessionMonitor monitors[IDD_MAX_CONNECTORS];
+    UINT count;
+} MonitorSession;
+
+static const SessionMonitor* FindSessionMonitor(const MonitorSession* session, UINT connector)
+{
+    for (UINT i = 0; i < session->count; ++i) {
+        if (session->monitors[i].Display.ConnectorIndex == connector) return &session->monitors[i];
+    }
+    return NULL;
+}
+
+static void RecordSessionMonitor(MonitorSession* session, const SessionMonitor* previous, SessionMonitor added)
+{
+    if (previous) {
+        const UINT index = (UINT)(previous - session->monitors);
+        --session->count;
+        for (UINT i = index; i < session->count; ++i)
+            session->monitors[i] = session->monitors[i + 1];
+    }
+    session->monitors[session->count++] = added;
+}
+
+static UINT ReadConnector(void)
+{
+    int ch;
+    do { ch = getchar(); } while (isblank(ch));
+    UINT connector = isdigit(ch) ? 0 : IDD_MAX_CONNECTORS;
+    while (isdigit(ch)) {
+        if (connector < IDD_MAX_CONNECTORS) connector = connector * 10 + (UINT)(ch - '0');
+        ch = getchar();
+    }
+    while (ch != '\n' && ch != EOF) {
+        if (!isspace(ch)) connector = IDD_MAX_CONNECTORS;
+        ch = getchar();
+    }
+    if (connector < IDD_MAX_CONNECTORS) return connector;
+    fprintf(stderr, "Enter a connector number from 0 to %u.\n", IDD_MAX_CONNECTORS - 1);
+    return IDD_MAX_CONNECTORS;
+}
+
+static void AddSessionMonitor(MonitorSession* session, BOOL selectConnector)
+{
+    UINT connector = 0;
+    const SessionMonitor* previous = NULL;
+    if (selectConnector) {
+        printf("Enter the connector to add (0-%u)\n", IDD_MAX_CONNECTORS - 1);
+        connector = ReadConnector();
+        if (connector == IDD_MAX_CONNECTORS) return;
+        previous = FindSessionMonitor(session, connector);
+    }
+    if (!previous && session->count == IDD_MAX_CONNECTORS) {
+        fprintf(stderr, "All connectors are recorded in this session. Use 'A' to retry a specific connector.\n");
+        return;
+    }
+    if (!selectConnector && session->count) {
+        connector = session->monitors[session->count - 1].Display.ConnectorIndex;
+        do {
+            connector = (connector + 1) % IDD_MAX_CONNECTORS;
+        } while (FindSessionMonitor(session, connector));
+    }
+    printf("Plug in monitor on connector %u\n", connector);
+    SessionMonitor added;
+    if (PlugInProfile(connector, previous ? &previous->Display : NULL, &added)) {
+        RecordSessionMonitor(session, previous, added);
+        printf("Plug in monitor done\n");
+    }
+}
 
 int prompt_input()
 {
@@ -34,15 +104,16 @@ int prompt_input()
     printf("       4. 'd'               4. destroy software device\n");
     printf("       5. 'i'               5. install or update driver\n");
     printf("       6. 'u'               6. uninstall driver\n");
-    printf("       7. 'a'               7. plug in monitor\n");
+    printf("       7. 'a' / 'A'         7. plug in next monitor / choose connector\n");
     printf("       8. 'b'               8. plug out monitor\n");
-    printf("       9. 'm'               9. update monitor modes\n");
+    printf("       9. 'm'               9. update live monitor modes\n");
 
     return _getch();
 }
 
-int __cdecl main(int argc, char* argv[])
+int __cdecl wmain(int argc, wchar_t* argv[])
 {
+    if (argc > 1) return RunDisplayCommand(argc, argv);
     HSWDEVICE hSwDevice = NULL;
     BOOL bExit = FALSE;
     SW_DEVICE_LIFETIME lifetime = SWDeviceLifetimeHandle;
@@ -51,7 +122,7 @@ int __cdecl main(int argc, char* argv[])
     DWORD height = 1080;
     DWORD sync = 60;
 
-    UINT index = 0;
+    MonitorSession session = {0};
 
     TCHAR exePath[1024] = { 0, };
     (void)GetModuleFileName(NULL, exePath, sizeof(exePath)/sizeof(exePath[0]) - 1);
@@ -116,51 +187,41 @@ int __cdecl main(int argc, char* argv[])
             printf("Close device done\n");
             break;
         case 'a':
-            printf("Plug in monitor begin, current index %u\n", index);
-            if (FALSE == MonitorPlugIn(index, 0, 25))
-            {
-                printf(GetLastMsg());
-            }
-            else
-            {
-                printf("Plug in monitor done\n");
-
-                MonitorMode modes[2] = { { 1920, 1080,  60 }, { 1024,  768,  60 }, };
-                if (FALSE == MonitorModesUpdate(index, sizeof(modes)/sizeof(modes[0]), modes))
-                {
-                    printf(GetLastMsg());
-                }
-
-                index += 1;
-            }
+        case 'A':
+            AddSessionMonitor(&session, key == 'A');
             break;
         case 'b':
-            if (index == 0) {
+            if (!session.count) {
                 printf("No virtual monitors\n");
                 break;
             }
 
-            printf("Plug out monitor begin, current index %u\n", index - 1);
-            if (FALSE == MonitorPlugOut(index - 1))
-            {
-                printf(GetLastMsg());
-            }
-            else
-            {
-                index -= 1;
+            const SessionMonitor* last = &session.monitors[session.count - 1];
+            printf("Plug out monitor on connector %u\n", last->Display.ConnectorIndex);
+            DWORD disconnect = DisconnectProfile(last);
+            if (disconnect == ERROR_SUCCESS) {
+                --session.count;
                 printf("Plug out monitor done\n");
+            } else if (disconnect == ERROR_ALREADY_EXISTS) {
+                --session.count;
+                fprintf(stderr, "The session monitor was replaced. The current monitor stays connected.\n");
+            } else {
+                fprintf(stderr, "Disconnect failed (Win32 %lu)\n", disconnect);
             }
             break;
         case 'm':
-            printf("Update monitor modes, current max index %u\n", index - 1);
-            printf("Please select the monitor from 0 to %d\n", index - 1);
-            UINT i = 0;
-            scanf_s("%d%*c", &i);
-            if (i >= index) {
-                fprintf(stderr, "Please select index less equal to %d, your input is %d\n", index - 1, i);
+            if (!session.count) {
+                printf("No virtual monitors\n");
+                break;
             }
-            else {
-                printf("\nYou have selected %d monitor to update modes.\n", i);
+            printf("Choose one of these session connectors");
+            for (UINT i = 0; i < session.count; ++i) printf(" %u", session.monitors[i].Display.ConnectorIndex);
+            putchar('\n');
+            UINT connector = ReadConnector();
+            if (connector == IDD_MAX_CONNECTORS) break;
+            const SessionMonitor* monitor = FindSessionMonitor(&session, connector);
+            if (monitor) {
+                printf("\nUpdating monitor modes on connector %u.\n", connector);
                 printf("Please add at lease one monitor mode, format: width, height, refresh frequency.\nThe max number of modes is %d.\nPress e to end input.\n", MAX_MONITOR_MODES);
 
                 int input_ok = 0;
@@ -193,12 +254,11 @@ int __cdecl main(int argc, char* argv[])
                         fprintf(stderr, "No monitor modes are added, skip.\n");
                     }
                     else {
-                        if (FALSE == MonitorModesUpdate(i, k, modes))
-                        {
-                            printf(GetLastMsg());
-                        }
+                        UpdateProfileModes(monitor, k, modes);
                     }
                 }
+            } else {
+                fprintf(stderr, "Connector %u is not in this session.\n", connector);
             }
             break;
         case 'q':
