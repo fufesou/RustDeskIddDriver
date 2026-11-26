@@ -78,19 +78,37 @@ namespace Microsoft { namespace IndirectDisp {
 }}
 
 namespace display {
-using Modes = std::vector<CtlDisplayMode>;
 using Microsoft::IndirectDisp::SwapChainProcessor;
 using RenderLimitProbe = NTSTATUS (*)(LUID, UINT&);
 NTSTATUS ProbeRenderLimit(LUID preferred, UINT& limit);
+struct AdapterMeasurement {
+    HRESULT enumeration;
+    HRESULT status;
+    UINT dimension;
+};
+template<class Next> HRESULT CommonRenderLimit(const Next& next, UINT& limit)
+{
+    UINT common = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+    HRESULT result = DXGI_ERROR_UNSUPPORTED;
+    for (UINT index = 0; ; ++index) {
+        const AdapterMeasurement sample = next(index);
+        if (sample.enumeration == DXGI_ERROR_NOT_FOUND) break;
+        if (FAILED(sample.enumeration)) return sample.enumeration;
+        if (SUCCEEDED(sample.status)) {
+            common = (std::min)(common, sample.dimension);
+            result = S_OK;
+        } else if (result == DXGI_ERROR_UNSUPPORTED) {
+            result = sample.status;
+        }
+    }
+    if (SUCCEEDED(result)) limit = common;
+    return result;
+}
 UINT TextureDimension(D3D_FEATURE_LEVEL level);
 constexpr UINT MinimumTextureDimension = D3D_FL9_1_REQ_TEXTURE2D_U_OR_V_DIMENSION;
 inline bool FitsSurface(const CtlDisplayMode& mode, UINT dimension)
 {
     return mode.Width <= dimension && mode.Height <= dimension;
-}
-inline bool HasRenderTarget(const Modes& modes, UINT dimension)
-{
-    return std::any_of(modes.begin(), modes.end(), [dimension](const auto& mode) { return FitsSurface(mode, dimension); });
 }
 inline bool FitsMinimumSurface(const Modes& modes)
 {
@@ -112,19 +130,20 @@ struct RenderChange {
 };
 
 struct TargetModeSnapshot {
-    std::shared_ptr<const Modes> candidates, accepted;
+    TargetModes candidates, accepted;
     UINT limit;
 
     const Modes& SourceModes() const {
         // A GPU switch can invalidate the pending update while IddCx is querying it.
-        if (candidates != accepted && !HasRenderTarget(*candidates, limit)) return *accepted;
-        return *candidates;
+        if (candidates.Fits(limit)) return *candidates.modes;
+        static const Modes empty;
+        return accepted.Fits(limit) ? *accepted.modes : empty;
     }
 };
 
 struct InitialTargets {
     UINT limit;
-    std::shared_ptr<const Modes> requested;
+    TargetModes requested;
     LUID adapter{};
     std::vector<LUID> adapters;
 };
@@ -140,8 +159,8 @@ public:
     NTSTATUS Assign(const IDARG_IN_SETSWAPCHAIN& args);
     void Unassign();
     NTSTATUS ReadCursor(const CtlCursorQuery& query, OutputBuffer& out);
-    NTSTATUS PublishTargets(const Modes& modes);
-    NTSTATUS RefreshTargets(RenderChange change);
+    NTSTATUS PublishTargets(const Modes& modes, LUID preferred, RenderLimitProbe probe);
+    NTSTATUS RefreshTargets(RenderChange change) { return SetTargets(requested, &change); }
     bool ObserveRenderLevel(D3D_FEATURE_LEVEL level, LUID adapter = {});
     void ReleaseRenderAssignment();
     void RetainRenderPreference(LUID previous) {
@@ -157,25 +176,26 @@ public:
         return {targets, requested, renderLimit ? renderLimit : publishedLimit};
     }
     UINT AssignedLimit() const;
-    ReplacementTargets PrepareReplacement(std::shared_ptr<const Modes> modes, LUID preferred) const;
-    std::shared_ptr<const Modes> RequestedTargets() const { return requested; }
+    ReplacementTargets PrepareReplacement(TargetModes modes, LUID preferred) const;
+    const TargetModes& RequestedTargets() const { return requested; }
 
     const ProfilePtr profile;
     IDDCX_MONITOR handle{};
     ColorOutput color;
     std::shared_ptr<const Modes> Targets() const {
         std::lock_guard<std::mutex> guard(renderLock);
-        return targets;
+        return targets.modes;
     }
 private:
-    void SetQueryTargets(const std::shared_ptr<const Modes>& modes) {
+    void SetQueryTargets(const TargetModes& modes) {
         std::lock_guard<std::mutex> guard(renderLock);
         targets = modes;
     }
     void BeginRenderAssignment();
     NTSTATUS EnableCursor();
-    NTSTATUS SetTargets(std::shared_ptr<const Modes> next, const RenderChange* pending = nullptr);
-    NTSTATUS CommitTargets(std::shared_ptr<const Modes> next, RenderChange change);
+    NTSTATUS MeasureTargetLimit(const Modes& modes, LUID preferred, RenderLimitProbe probe);
+    NTSTATUS SetTargets(TargetModes next, const RenderChange* pending = nullptr);
+    NTSTATUS CommitTargets(TargetModes next, RenderChange change);
     void RememberAdapter(LUID adapter);
     bool ChangeLimit(UINT limit);
     const WDFWORKITEM modeWork;
@@ -189,11 +209,11 @@ private:
     UINT64 renderRevision = 0;
     UINT publishedLimit;
     bool republishTargets = false;
-    std::shared_ptr<const Modes> requested;
+    TargetModes requested;
     CursorSnapshot cursor;
     bool cursorValid = false;
     NTSTATUS cursorStatus = STATUS_DEVICE_NOT_READY;
-    std::shared_ptr<const Modes> targets;
+    TargetModes targets;
     std::mutex pathLock;
     bool withdrawing = false;
     Microsoft::WRL::Wrappers::Event cursorEvent;

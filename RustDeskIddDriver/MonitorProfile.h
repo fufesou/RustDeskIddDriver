@@ -5,9 +5,10 @@
 #include <mutex>
 
 namespace display {
+using Modes = std::vector<CtlDisplayMode>;
 struct Profile {
     CtlDisplayProfile header{};
-    std::vector<CtlDisplayMode> modes;
+    Modes modes;
     std::vector<BYTE> edid;
     DescriptorTimings timings;
     bool legacy = false;
@@ -19,18 +20,22 @@ struct Profile {
 };
 
 using ProfilePtr = std::shared_ptr<const Profile>;
+struct TargetModes {
+    std::shared_ptr<const Modes> modes;
+    UINT minimumDimension{}; // Smallest surface for a shared monitor/target timing, or zero if none match.
+    bool Fits(UINT limit) const { return minimumDimension && minimumDimension <= limit; }
+};
+TargetModes MatchTargetModes(const Profile& profile, std::shared_ptr<const Modes> modes);
 std::shared_ptr<Profile> LegacyProfile(const CtlPlugIn& request);
 const std::vector<CtlDisplayMode>& LegacyTargets();
 DISPLAYCONFIG_VIDEO_SIGNAL_INFO Timing(const CtlDisplayMode& mode, bool monitor, const Profile& profile);
 NTSTATUS DecodeProfile(const CtlDisplayProfile& request, size_t bytes, Profile& profile);
 NTSTATUS ValidateModeRequest(const CtlDisplayProfile& request, size_t bytes, const ProfilePtr& current);
 NTSTATUS GenerateEdid(Profile& profile);
-NTSTATUS ValidateProfileSignals(const Profile& profile);
+NTSTATUS ValidateProfileSignals(const Profile& profile, const std::vector<CtlDisplayMode>& modes);
 void IdentifyEdid(Profile& profile);
 enum class ModeRequest { Profile, TargetList };
 bool SameModes(const std::vector<CtlDisplayMode>& a, const std::vector<CtlDisplayMode>& b);
-bool CanUpdateTargets(const std::vector<CtlDisplayMode>& advertised, const std::vector<CtlDisplayMode>& requested,
-                      ModeRequest kind);
 bool SameProfile(const Profile& a, const Profile& b);
 
 // ParseMonitorDescription supplies only descriptor bytes. Keep advertised

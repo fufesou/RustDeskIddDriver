@@ -31,23 +31,9 @@ static NTSTATUS CreateMonitor(IDDCX_ADAPTER adapter, const Profile& profile, IDD
     return status;
 }
 
-static std::shared_ptr<const Modes> ProfileTargets(const ProfilePtr& profile)
+static TargetModes ProfileTargets(const ProfilePtr& profile)
 {
-    return {profile, profile->legacy ? &LegacyTargets() : &profile->modes};
-}
-
-NTSTATUS Device::InitialLimit(InitialTargets& initial) const
-{
-    if (FitsMinimumSurface(*initial.requested)) {
-        initial.limit = MinimumTextureDimension;
-        return STATUS_SUCCESS;
-    }
-    const NTSTATUS status = probeLimit(initial.adapter, initial.limit);
-    if (status != STATUS_NOT_FOUND || SameAdapter(initial.adapter, {})) return status;
-    // Windows owns GPU selection when a previously preferred adapter is removed.
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "Measuring available render adapters after the selected GPU was removed");
-    initial.adapter = {};
-    return probeLimit(initial.adapter, initial.limit);
+    return MatchTargetModes(*profile, {profile, profile->legacy ? &LegacyTargets() : &profile->modes});
 }
 
 NTSTATUS Device::Attach(ProfilePtr profile)
@@ -70,17 +56,17 @@ NTSTATUS Device::Arrive(const ProfilePtr& profile, const GUID& attachment, Initi
 {
     const UINT index = profile->header.ConnectorIndex;
     const UINT limit = initial.limit;
+    if (!initial.requested.Fits(limit)) {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "Connector %u has no monitor-compatible target within %u pixels", index, limit);
+        return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
+    }
     std::unique_ptr<Monitor> monitor;
     try {
         monitor = std::make_unique<Monitor>(profile, std::move(initial), GetDeviceContext(device)->modeWork);
     } catch (const std::bad_alloc&) {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
-    if (monitor->Targets()->empty()) {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "Connector %u has no configured target within %u pixels", index, limit);
-        return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
-    }
-    if (monitor->Targets()->size() != monitor->RequestedTargets()->size())
+    if (monitor->Targets()->size() != monitor->RequestedTargets().modes->size())
         TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "Connector %u target modes limited to %u pixels per axis", index, limit);
     IDDCX_MONITOR handle{};
     NTSTATUS status = CreateMonitor(adapter, *profile, handle);
@@ -121,7 +107,7 @@ NTSTATUS Device::Replace(UINT index, ProfilePtr next)
         const NTSTATUS probe = InitialLimit(targets.next);
         if (!NT_SUCCESS(probe)) return probe;
     }
-    if (!HasRenderTarget(next->modes, targets.next.limit)) return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
+    if (!targets.next.requested.Fits(targets.next.limit)) return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
     auto& directory = Descriptors();
     NTSTATUS status = directory.Add(next, old);
     if (!NT_SUCCESS(status)) return status;
@@ -160,7 +146,7 @@ NTSTATUS Device::Apply(ProfilePtr profile)
     if (!enabled) return current ? Detach(index) : STATUS_SUCCESS;
     if (!current) return Attach(std::move(profile));
     if (SameProfile(*current, *profile))
-        return GetMonitor(slots[index].handle).PublishTargets(profile->modes);
+        return GetMonitor(slots[index].handle).PublishTargets(profile->modes, preferredGpu, probeLimit);
     return Replace(index, std::move(profile));
 }
 
@@ -186,8 +172,12 @@ NTSTATUS Device::ChangeModes(UINT index, Modes modes, ModeRequest kind)
 {
     const auto& slot = slots[index];
     if (ValidateModes(modes) != ModeListStatus::Valid) return STATUS_INVALID_PARAMETER;
-    if (CanUpdateTargets(slot.profile->modes, modes, kind))
-        return GetMonitor(slot.handle).PublishTargets(modes);
+    if (kind == ModeRequest::TargetList) {
+        const NTSTATUS status = ValidateProfileSignals(*slot.profile, modes);
+        if (!NT_SUCCESS(status)) return status;
+    }
+    if (kind == ModeRequest::TargetList || SameModes(slot.profile->modes, modes))
+        return GetMonitor(slot.handle).PublishTargets(modes, preferredGpu, probeLimit);
 
     auto next = std::make_shared<Profile>(*slot.profile);
     if (next->legacy) {
@@ -196,7 +186,7 @@ NTSTATUS Device::ChangeModes(UINT index, Modes modes, ModeRequest kind)
     }
     next->legacy = false;
     next->modes = std::move(modes);
-    const NTSTATUS status = next->generated ? GenerateEdid(*next) : ValidateProfileSignals(*next);
+    const NTSTATUS status = next->generated ? GenerateEdid(*next) : ValidateProfileSignals(*next, next->modes);
     if (!NT_SUCCESS(status)) return status;
     return Replace(index, std::move(next));
 }
@@ -211,7 +201,7 @@ NTSTATUS Device::SetGpu(LUID luid)
     for (const auto& slot : slots) {
         if (!slot.handle) continue;
         auto& monitor = GetMonitor(slot.handle);
-        if (!HasRenderTarget(*monitor.RequestedTargets(), limit)) return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
+        if (!monitor.RequestedTargets().Fits(limit)) return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
         // The outgoing preference may have published modes before Windows assigned a swap chain.
         monitor.RetainRenderPreference(preferredGpu);
     }
@@ -238,7 +228,7 @@ NTSTATUS Device::RefreshRenderLimit(UINT index)
     auto& monitor = GetMonitor(slots[index].handle);
     RenderChange change{};
     if (!monitor.PendingRenderChange(change)) return STATUS_SUCCESS;
-    if (HasRenderTarget(*monitor.RequestedTargets(), change.limit)) {
+    if (monitor.RequestedTargets().Fits(change.limit)) {
         const auto previous = monitor.Targets();
         const NTSTATUS status = monitor.RefreshTargets(change);
         if (NT_SUCCESS(status) && previous != monitor.Targets())

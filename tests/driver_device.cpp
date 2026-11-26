@@ -11,7 +11,6 @@ decltype(IddDriverGlobals) IddDriverGlobals{};
 decltype(IddFrameworkExtensionName) IddFrameworkExtensionName{};
 decltype(WdfDriverGlobals) WdfDriverGlobals{};
 decltype(WdfFunctions) WdfFunctions{};
-// The framework fills these boundaries when binding the driver.
 BOOLEAN IddClientVersionHigherThanFramework{}, WdfClientVersionHigherThanFramework{};
 ULONG IddFunctionCount{}, IddStructureCount{}, WdfStructureCount{};
 WDF_STRUCT_INFO IddStructures{}, WdfStructures{};
@@ -117,18 +116,18 @@ static NTSTATUS TestRenderLimit(LUID gpu, UINT& limit) {
 struct TestDevice : Device {
     OutputBuffer out{};
     explicit TestDevice(Framework& fx, UINT preferred = 0) : Device(reinterpret_cast<WDFDEVICE>(&fx.deviceContext), TestRenderLimit) {
-        assert(NT_SUCCESS(InitAdapter()));
+        assert(IddMinimumVersionRequired == 4 && NT_SUCCESS(InitAdapter()));
         LUID gpu{preferred};
         assert(NT_SUCCESS(Control(IOCTL_IDD_SET_RENDER_ADAPTER, {&gpu, sizeof(gpu)}, out)));
     }
-    NTSTATUS SetMode(const CtlDisplayMode& mode) {
-        CtlMonitorModes subset{0, 1, {{mode.Width, mode.Height, mode.Numerator}}};
-        return Control(IOCTL_CHANGER_IDD_UPDATE_MONITOR_MODE, {&subset, sizeof(subset)}, out);
+    NTSTATUS SetMode(CtlDisplayMode mode, CtlDisplayMode extra = {}) {
+        struct { CtlMonitorModes first; decltype(CtlMonitorModes::Modes) second; } packet{
+            {0, extra.Width ? 2u : 1u, {{mode.Width, mode.Height, mode.Numerator}}}, {{extra.Width, extra.Height, extra.Numerator}}};
+        return Control(IOCTL_CHANGER_IDD_UPDATE_MONITOR_MODE, {&packet, CtlModeRequestBytes(packet.first.ModeCount)}, out);
     }
 };
 
 enum class Publication { WideOnly, Mixed, ReassignedDuringUpdate, Reexpanded };
-
 void CheckReplacementRollback(UINT preferred, Publication publication = Publication::WideOnly, bool busy = false) {
     Framework fx;
     TestDevice device(fx, preferred);
@@ -206,15 +205,15 @@ void CheckRollbackWithBusyGpu(UINT busyGpu, bool keepMixed = false) {
             std::remove_pointer_t<decltype(input.pTargetModes)> target{};
             input = {{}, 1, &target};
             assert(NT_SUCCESS(query(m.handle, &input, &out)) && out.TargetModeBufferOutputCount == 1);
-            const auto size = target.TargetVideoSignalInfo.targetVideoSignalInfo.activeSize;
-            assert(size.cx == 1280 && size.cy == 720);
+            const auto expected = m.profile->DescribeMode({1280,720,50,1});
+            assert(SignalKey(target.TargetVideoSignalInfo.targetVideoSignalInfo) == SignalKey(expected.MonitorVideoSignalInfo));
         };
 #if IDDCX_VERSION_MINOR >= 10
         if (AdvancedColorAvailable()) return check(config.EvtIddCxMonitorQueryTargetModes2, IDARG_IN_QUERYTARGETMODES2{});
 #endif
         check(config.EvtIddCxMonitorQueryTargetModes, IDARG_IN_QUERYTARGETMODES{});
     };
-    assert(device.SetMode(profile.modes[0]) == STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED);
+    assert(device.SetMode(profile.modes[0], {1600,1000,60,1}) == STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED);
     device.RefreshRenderModes();
     assert(restored.limit == (keepMixed ? MinimumTextureDimension : (busyGpu == 16384 ? 8192u : 16384u)));
     assert(fx.monitor.instance && SameModes(*fx.monitor.instance->Targets(), restored.SourceModes()));
@@ -226,17 +225,19 @@ void CheckSessionOwner() {
     TestDevice device(fx);
     Packet owner(1), other(2);
     assert(NT_SUCCESS(owner.Send(device, IOCTL_IDD_SESSION_PROFILE)));
+    assert(device.SetMode({2560,1440,60,1}) == STATUS_GRAPHICS_MODE_NOT_IN_MODESET && fx.monitor.instance->Targets() == fx.arrivalModes);
     assert(other.Send(device, IOCTL_IDD_SESSION_PROFILE) == STATUS_OBJECT_NAME_COLLISION);
     assert(other.Disabled().Send(device, IOCTL_IDD_SESSION_PROFILE) == STATUS_OBJECT_NAME_COLLISION);
-    auto duplicate = std::make_shared<Profile>(*fx.monitor.instance->profile);
-    duplicate->header.ConnectorIndex = 1;
-    assert(fx.directory.Add(duplicate) == STATUS_OBJECT_NAME_COLLISION);
-    assert(NT_SUCCESS(owner.Disabled().Send(device, IOCTL_IDD_SESSION_PROFILE)));
+    const CtlPlugIn plug{0, MONITOR_EDID_MOD_DELL_S2719DGF, owner.header.Profile.ContainerId};
+    assert(fx.directory.Add(LegacyProfile({1, plug.MonitorEDID, plug.ContainerId})) == STATUS_OBJECT_NAME_COLLISION);
     CtlProfileDisconnect observed{{0, owner.header.Profile.ContainerId}, 1};
     const auto disconnect = [&] { return device.Control(IOCTL_IDD_DISCONNECT_PROFILE, {&observed, sizeof(observed)}, device.out); };
-    assert(disconnect() == STATUS_RETRY);
-    assert(NT_SUCCESS(other.Send(device, IOCTL_IDD_SESSION_PROFILE)));
-    assert(disconnect() == STATUS_RETRY && fx.monitor.instance);
+    assert(NT_SUCCESS(owner.Disabled().Send(device, IOCTL_IDD_SESSION_PROFILE)) && disconnect() == STATUS_RETRY);
+    assert(NT_SUCCESS(device.Control(IOCTL_CHANGER_IDD_PLUG_IN, {&plug, sizeof(plug)}, device.out)) && disconnect() == STATUS_RETRY);
+    const Modes mixed{{2560,1440,144,1}, {1600,1000,60,1}};
+    assert(NT_SUCCESS(device.SetMode(mixed.front(), mixed.back())));
+    for (const auto& unsupported : Modes{mixed.back(), {2560,1440,60,1}})
+        assert(device.SetMode(unsupported) == STATUS_GRAPHICS_MODE_NOT_IN_MODESET && SameModes(*fx.monitor.instance->Targets(), mixed));
     ++observed.Arrival;
     assert(NT_SUCCESS(disconnect()) && !fx.monitor.instance);
 }
@@ -288,7 +289,6 @@ static void CheckAllocationRaces() {
 } // namespace
 
 void CheckDriverDevice() {
-    assert(IddMinimumVersionRequired == 4);
     CheckSessionOwner();
     for (UINT preferred : {0u, 8192u}) CheckReplacementRollback(preferred);
     CheckReplacementRollback(8192, Publication::WideOnly, true);

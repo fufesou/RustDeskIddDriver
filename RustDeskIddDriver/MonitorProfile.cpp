@@ -46,12 +46,32 @@ IDDCX_MONITOR_MODE Profile::DescribeMode(const CtlDisplayMode& mode) const
     return result;
 }
 
+static auto ScanTimingKey(const DISPLAYCONFIG_VIDEO_SIGNAL_INFO& signal)
+{
+    return std::make_tuple(SignalKey(signal), signal.pixelRate, signal.vSyncFreq.Numerator, signal.vSyncFreq.Denominator);
+}
+
+TargetModes MatchTargetModes(const Profile& profile, std::shared_ptr<const Modes> modes)
+{
+    const bool fromProfile = modes.get() == &profile.modes;
+    std::set<decltype(ScanTimingKey({}))> advertised;
+    if (!fromProfile)
+        for (const auto& mode : profile.modes) advertised.insert(ScanTimingKey(Timing(mode, true, profile)));
+
+    UINT minimum = 0;
+    for (const auto& mode : *modes) {
+        const UINT extent = (std::max)(mode.Width, mode.Height);
+        if (minimum && extent >= minimum) continue;
+        if (fromProfile || advertised.count(ScanTimingKey(Timing(mode, false, profile)))) minimum = extent;
+    }
+    return {std::move(modes), minimum};
+}
+
 static auto MonitorModeKey(const Profile& profile, const CtlDisplayMode& mode)
 {
     const auto description = profile.DescribeMode(mode);
     const auto& signal = description.MonitorVideoSignalInfo;
-    return std::make_tuple(description.Origin, SignalKey(signal), signal.pixelRate, signal.vSyncFreq.Numerator,
-                           signal.vSyncFreq.Denominator, signal.videoStandard, signal.scanLineOrdering);
+    return std::make_tuple(description.Origin, ScanTimingKey(signal), signal.videoStandard, signal.scanLineOrdering);
 }
 
 static bool SameMonitorDescription(const Profile& a, const Profile& b)
@@ -63,8 +83,7 @@ static bool SameMonitorDescription(const Profile& a, const Profile& b)
 void IdentifyEdid(Profile& profile)
 {
     if (profile.edid.empty()) return;
-    // The Windows parser has no connector handle. Give generated monitors a
-    // stable base-block serial, including when legacy clients add new modes.
+    // The Windows parser has no connector handle. Give the description a stable serial per monitor.
     UINT serial = 2166136261u;
     const auto* id = reinterpret_cast<const BYTE*>(&profile.header.ContainerId);
     for (size_t i = 0; i < sizeof(GUID); ++i) serial = (serial ^ id[i]) * 16777619u;
@@ -99,9 +118,9 @@ std::shared_ptr<Profile> LegacyProfile(const CtlPlugIn& request)
     return p;
 }
 
-NTSTATUS ValidateProfileSignals(const Profile& p)
+NTSTATUS ValidateProfileSignals(const Profile& p, const Modes& modes)
 {
-    const auto status = p.timings.Validate(p.modes, !p.edid.empty() && !p.legacy).status;
+    const auto status = p.timings.Validate(modes, !p.edid.empty() && !p.legacy).status;
     if (status == SignalListStatus::Duplicate) return STATUS_GRAPHICS_MODE_ALREADY_IN_MODESET;
     if (status == SignalListStatus::RequiresYCbCr420 || status == SignalListStatus::UnusableEdidTiming ||
         status == SignalListStatus::InvalidDetailedSync)
@@ -115,7 +134,7 @@ NTSTATUS GenerateEdid(Profile& p)
     if (p.edid.empty()) return STATUS_NOT_SUPPORTED;
     IdentifyEdid(p);
     p.generated = true;
-    return ValidateProfileSignals(p);
+    return ValidateProfileSignals(p, p.modes);
 }
 
 NTSTATUS DecodeProfile(const CtlDisplayProfile& request, size_t bytes, Profile& p)
@@ -139,7 +158,7 @@ NTSTATUS DecodeProfile(const CtlDisplayProfile& request, size_t bytes, Profile& 
         if (!p.timings.Read(p.edid))
             return CheckEdidHeader(p.edid) == EdidHeaderStatus::UnsupportedVersion ? STATUS_REVISION_MISMATCH : STATUS_INVALID_PARAMETER;
         if (p.Hdr() && !p.timings.HasHdr10()) return STATUS_INVALID_PARAMETER;
-        return ValidateProfileSignals(p);
+        return ValidateProfileSignals(p, p.modes);
     }
     return GenerateEdid(p);
 }
@@ -163,18 +182,6 @@ bool SameProfile(const Profile& a, const Profile& b)
 {
     return a.legacy == b.legacy && a.generated == b.generated && a.header.Flags == b.header.Flags &&
            a.edid == b.edid && SameModes(a.modes, b.modes);
-}
-
-bool CanUpdateTargets(const std::vector<CtlDisplayMode>& advertised, const std::vector<CtlDisplayMode>& requested,
-                      ModeRequest kind)
-{
-    if (kind == ModeRequest::Profile) return SameModes(advertised, requested);
-    if (requested.empty() || advertised.size() < requested.size()) return false;
-    std::set<decltype(ModeKey(CtlDisplayMode{}))> keys;
-    for (const auto& mode : advertised) keys.insert(ModeKey(mode));
-    return std::all_of(requested.begin(), requested.end(), [&](const CtlDisplayMode& mode) {
-        return keys.count(ModeKey(mode)) != 0;
-    });
 }
 
 NTSTATUS DescriptorDirectory::Add(const ProfilePtr& profile, const ProfilePtr& replacing)

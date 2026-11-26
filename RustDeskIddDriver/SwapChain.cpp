@@ -34,25 +34,16 @@ static HRESULT InitialLimit(LUID preferred, UINT& limit)
         hr = factory->EnumAdapterByLuid(preferred, IID_PPV_ARGS(&selected));
         return FAILED(hr) ? hr : AdapterLimit(selected.Get(), limit);
     }
-    // IddCx supplies the actual render LUID at swap-chain assignment. Until then
-    // expose modes that can be allocated on every selectable D3D render adapter.
-    UINT common = D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION;
-    bool found = false;
-    for (UINT index = 0; ; ++index) {
+    // Until IddCx assigns the swap chain, use the shared limit of the usable render adapters.
+    return CommonRenderLimit([&](UINT index) {
         ComPtr<IDXGIAdapter1> candidate;
-        hr = factory->EnumAdapters1(index, &candidate);
-        if (hr == DXGI_ERROR_NOT_FOUND) break;
-        if (FAILED(hr)) return hr;
-        UINT dimension{};
-        hr = AdapterLimit(candidate.Get(), dimension);
-        if (hr == DXGI_ERROR_UNSUPPORTED) continue; // Display-only adapter.
-        if (FAILED(hr)) return hr;
-        common = (std::min)(common, dimension);
-        found = true;
-    }
-    if (!found) return DXGI_ERROR_UNSUPPORTED;
-    limit = common;
-    return S_OK;
+        AdapterMeasurement sample{factory->EnumAdapters1(index, &candidate)};
+        if (FAILED(sample.enumeration)) return sample;
+        sample.status = AdapterLimit(candidate.Get(), sample.dimension);
+        if (FAILED(sample.status) && sample.status != DXGI_ERROR_UNSUPPORTED)
+            TraceEvents(TRACE_LEVEL_WARNING, TRACE_DRIVER, "Skipping unusable render adapter %u: %!HRESULT!", index, sample.status);
+        return sample;
+    }, limit);
 }
 
 NTSTATUS ProbeRenderLimit(LUID preferred, UINT& limit)
@@ -63,6 +54,43 @@ NTSTATUS ProbeRenderLimit(LUID preferred, UINT& limit)
     if (hr == E_OUTOFMEMORY) return STATUS_INSUFFICIENT_RESOURCES;
     if (hr == DXGI_ERROR_NOT_FOUND) return STATUS_NOT_FOUND;
     return hr == DXGI_ERROR_UNSUPPORTED ? STATUS_NOT_SUPPORTED : STATUS_UNSUCCESSFUL;
+}
+
+static NTSTATUS MeasureUnassignedAdapter(LUID& adapter, UINT& limit, RenderLimitProbe probe)
+{
+    const NTSTATUS status = probe(adapter, limit);
+    if (status != STATUS_NOT_FOUND || SameAdapter(adapter, {})) return status;
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "Measuring available render adapters after the selected GPU was removed");
+    adapter = {};
+    return probe(adapter, limit);
+}
+
+NTSTATUS Device::InitialLimit(InitialTargets& initial) const
+{
+    if (!FitsMinimumSurface(*initial.requested.modes))
+        return MeasureUnassignedAdapter(initial.adapter, initial.limit, probeLimit);
+    initial.limit = MinimumTextureDimension;
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS Monitor::MeasureTargetLimit(const Modes& modes, LUID preferred, RenderLimitProbe probe)
+{
+    if (FitsMinimumSurface(modes)) return STATUS_SUCCESS;
+    const auto needsProbe = [&] { return !assigned && !renderLimit && publishedLimit == MinimumTextureDimension; };
+    {
+        std::lock_guard<std::mutex> guard(renderLock);
+        if (!needsProbe()) return STATUS_SUCCESS;
+    }
+    UINT measured{};
+    const NTSTATUS status = MeasureUnassignedAdapter(preferred, measured, probe);
+    std::lock_guard<std::mutex> guard(renderLock);
+    if (!needsProbe()) return STATUS_SUCCESS; // A concurrent assignment supplied the actual limit.
+    if (NT_SUCCESS(status)) {
+        RememberAdapter(preferred);
+        lastAdapter = preferred;
+        ChangeLimit(measured);
+    }
+    return status;
 }
 
 NTSTATUS Device::RestoreRenderLimit(InitialTargets& previous) const
@@ -83,7 +111,7 @@ NTSTATUS Device::RestoreRenderLimit(InitialTargets& previous) const
             return false;
         }
         const UINT limit = (std::min)(published, measured);
-        if (limit <= previous.limit || !HasRenderTarget(*previous.requested, limit)) return false;
+        if (limit <= previous.limit || !previous.requested.Fits(limit)) return false;
         previous.adapter = adapter;
         previous.limit = limit;
         return limit == published;
@@ -93,7 +121,7 @@ NTSTATUS Device::RestoreRenderLimit(InitialTargets& previous) const
     for (auto it = previous.adapters.rbegin(); it != previous.adapters.rend(); ++it)
         if (!SameAdapter(first, *it) && consider(*it)) return STATUS_SUCCESS;
     if (useAvailable) consider({});
-    if (!previous.limit && HasRenderTarget(*previous.requested, MinimumTextureDimension))
+    if (!previous.limit && previous.requested.Fits(MinimumTextureDimension))
         previous.limit = MinimumTextureDimension;
     return previous.limit ? STATUS_SUCCESS : failure;
 }

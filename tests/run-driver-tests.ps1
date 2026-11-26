@@ -25,6 +25,7 @@ try {
         /DIDDCX_VERSION_MAJOR=1 "/DIDDCX_VERSION_MINOR=$IddMinor" /DIDDCX_MINIMUM_VERSION_REQUIRED=4 `
         /DWPP_MACRO_USE_KM_VERSION_FOR_UM "/I$IddInclude" "/I$Kit/Include/wdf/umdf/2.25" "/I$build" `
         "$PSScriptRoot/driver_profiles.cpp" "$PSScriptRoot/driver_device.cpp" "$project/../RustDeskIddApp/HdrColor.cpp" `
+        "$project/../RustDeskIddApp/ProfileFile.cpp" `
         "$project/MonitorProfile.cpp" "$project/GeneratedEdid.cpp" "$project/ColorState.cpp" `
         "$project/CursorState.cpp" "$project/AdvancedColor.cpp" "$project/DisplayModes.cpp" @traced `
         /link /OPT:REF uuid.lib advapi32.lib avrt.lib dxgi.lib d3d11.lib /OUT:driver_profiles.exe

@@ -1,6 +1,7 @@
 // Offline driver contracts. Build with the Windows SDK and WDK via run-driver-tests.ps1.
 #include "../RustDeskIddDriver/Driver.h"
 #include "../RustDeskIddApp/HdrSample.h"
+#include "../RustDeskIddApp/ProfileFile.h"
 #include <cassert>
 #include <cstdio>
 
@@ -10,14 +11,7 @@ void CheckDriverDevice();
 static const GUID ScreenId = {0xc26c0a51, 0xa356, 0x4d96, {0xac, 0xd5, 0xdd, 0x62, 0x4a, 0x0a, 0x2b, 0xe9}};
 
 static std::vector<BYTE> Packet(UINT flags, const Modes& modes, const std::vector<BYTE>& edid = {}) {
-    CtlDisplayProfile h{IDD_PROFILE_VERSION, 0, ScreenId, flags, static_cast<UINT>(modes.size()),
-                        static_cast<UINT>(edid.size())};
-    const auto bytes = modes.size() * sizeof(CtlDisplayMode);
-    std::vector<BYTE> data(sizeof(h) + bytes + edid.size());
-    memcpy(data.data(), &h, sizeof(h));
-    if (bytes) memcpy(data.data() + sizeof(h), modes.data(), bytes);
-    if (!edid.empty()) memcpy(data.data() + sizeof(h) + bytes, edid.data(), edid.size());
-    return data;
+    return profiles::Packet({{IDD_PROFILE_VERSION, 0, ScreenId, flags}, modes, edid});
 }
 
 static NTSTATUS Decode(const std::vector<BYTE>& data, Profile& out) {
@@ -28,14 +22,11 @@ static void CheckProfiles() {
     const Modes modes{{3840, 2160, 120, 1}, {1920, 1080, 120000, 2002}};
     auto data = Packet(IDD_PROFILE_ENABLED | IDD_PROFILE_HDR, modes);
     Profile first, second;
-    assert(NT_SUCCESS(Decode(data, first)));
+    assert(NT_SUCCESS(Decode(data, first)) && ValidEdid(first.edid) && first.timings.HasHdr10());
     assert(SameModes(first.modes, {{3840, 2160, 120, 1}, {1920, 1080, 60000, 1001}}));
-    assert(ValidEdid(first.edid) && first.timings.HasHdr10());
     assert(NT_SUCCESS(Decode(data, second)) && SameProfile(first, second));
-    Profile reduced = first;
-    reduced.modes.pop_back();
-    assert(!SameProfile(first, reduced));
-    assert(CanUpdateTargets(first.modes, reduced.modes, ModeRequest::TargetList));
+    second.modes.pop_back();
+    assert(!SameProfile(first, second));
     data.pop_back();
     assert(Decode(data, second) == STATUS_INVALID_PARAMETER);
     assert(Decode(Packet(IDD_PROFILE_ENABLED, {{1, 1, 1, 0}}), second) == STATUS_INVALID_PARAMETER);
@@ -43,8 +34,7 @@ static void CheckProfiles() {
     assert(NT_SUCCESS(Decode(Packet(0, {}), second)));
 }
 
-static void CheckTimingAndLegacyModes()
-{
+static void CheckTimingAndLegacyModes() {
     constexpr DWORD prefix = offsetof(CtlMonitorModes, Modes);
     constexpr DWORD item = sizeof(CtlMonitorModes{}.Modes[0]);
     constexpr UINT maxModes = (MAXDWORD - prefix) / item;
@@ -64,6 +54,16 @@ static void CheckTimingAndLegacyModes()
     const CtlDisplayMode exactDell{2560, 1440, 3637500, 25177};
     assert(NT_SUCCESS(Decode(Packet(IDD_PROFILE_ENABLED, {exactDell}, dell->edid), imported)));
     assert(Decode(Packet(IDD_PROFILE_ENABLED, {dell->modes.front(), exactDell}, dell->edid), imported) == STATUS_GRAPHICS_MODE_ALREADY_IN_MODESET);
+}
+
+static void CheckRenderLimits() {
+    std::array<AdapterMeasurement, 5> gpus{{{S_OK,DXGI_ERROR_DEVICE_REMOVED}, {S_OK,S_FALSE,8192},
+        {S_OK,S_OK,4096}, {S_OK,DXGI_ERROR_DEVICE_RESET}, {DXGI_ERROR_NOT_FOUND}}};
+    const auto next = [&](UINT index) { return gpus.at(index); };
+    UINT limit{};
+    assert(CommonRenderLimit(next, limit) == S_OK && limit == 4096);
+    gpus[1].status = gpus[2].status = DXGI_ERROR_UNSUPPORTED;
+    assert(CommonRenderLimit(next, limit) == DXGI_ERROR_DEVICE_REMOVED);
 }
 
 static void CheckSharedEdid(const Modes& modes, NTSTATUS expected, UINT flags = IDD_PROFILE_ENABLED) {
@@ -291,7 +291,7 @@ static void CheckHdrMetadata() {
 
 int main() {
     for (auto check : {CheckProfiles, CheckTimingAndLegacyModes, CheckPreferredEdid, CheckVideoTimingExtension,
-                       CheckCursorSetup, CheckCursor, CheckHdrOutput,
+                       CheckRenderLimits, CheckCursorSetup, CheckCursor, CheckHdrOutput,
 #if IDDCX_VERSION_MINOR >= 10
                        CheckVersionGate, CheckHdrMetadata,
 #endif

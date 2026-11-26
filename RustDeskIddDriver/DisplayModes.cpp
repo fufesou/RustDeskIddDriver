@@ -102,13 +102,14 @@ NTSTATUS SendTargets(Monitor& monitor, const Modes& modes, Update update)
     return update(monitor.handle, &input);
 }
 
-std::shared_ptr<const Modes> Available(const std::shared_ptr<const Modes>& modes, UINT limit)
+TargetModes Available(const TargetModes& list, UINT limit)
 {
     const auto fits = [limit](const auto& mode) { return FitsSurface(mode, limit); };
-    if (std::all_of(modes->begin(), modes->end(), fits)) return modes;
+    const auto& modes = *list.modes;
+    if (std::all_of(modes.begin(), modes.end(), fits)) return list;
     auto result = std::make_shared<Modes>();
-    std::copy_if(modes->begin(), modes->end(), std::back_inserter(*result), fits);
-    return result;
+    std::copy_if(modes.begin(), modes.end(), std::back_inserter(*result), fits);
+    return {std::move(result), list.minimumDimension};
 }
 } // namespace
 
@@ -133,6 +134,8 @@ Monitor::Monitor(ProfilePtr p, InitialTargets initial, WDFWORKITEM work) : profi
     renderLimit(initial.limit), lastAdapter(initial.adapter), adapters(std::move(initial.adapters)),
     publishedLimit(initial.limit), requested(std::move(initial.requested)), targets(Available(requested, initial.limit))
 {
+    // Small initial lists only establish the guaranteed floor until a GPU is measured.
+    if (initial.limit == MinimumTextureDimension && FitsMinimumSurface(*requested.modes)) renderLimit = 0;
     RememberAdapter(lastAdapter);
 }
 
@@ -142,18 +145,16 @@ void Monitor::RememberAdapter(LUID adapter)
         [adapter](LUID known) { return SameAdapter(known, adapter); })) adapters.push_back(adapter);
 }
 
-NTSTATUS Monitor::PublishTargets(const Modes& modes)
+NTSTATUS Monitor::PublishTargets(const Modes& modes, LUID preferred, RenderLimitProbe probe)
 {
     try {
-        return SetTargets(SameModes(*requested, modes) ? requested : std::make_shared<const Modes>(modes));
+        auto next = SameModes(*requested.modes, modes) ? requested : MatchTargetModes(*profile, std::make_shared<const Modes>(modes));
+        if (!next.minimumDimension) return STATUS_GRAPHICS_MODE_NOT_IN_MODESET;
+        const NTSTATUS status = MeasureTargetLimit(modes, preferred, probe);
+        return NT_SUCCESS(status) ? SetTargets(std::move(next)) : status;
     } catch (const std::bad_alloc&) {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
-}
-
-NTSTATUS Monitor::RefreshTargets(RenderChange change)
-{
-    return SetTargets(requested, &change);
 }
 
 void Monitor::BeginRenderAssignment()
@@ -230,7 +231,7 @@ UINT Monitor::AssignedLimit() const
     return assigned ? renderLimit : 0;
 }
 
-ReplacementTargets Monitor::PrepareReplacement(std::shared_ptr<const Modes> modes, LUID preferred) const
+ReplacementTargets Monitor::PrepareReplacement(TargetModes modes, LUID preferred) const
 {
     std::lock_guard<std::mutex> guard(renderLock);
     const bool hasAdapter = assigned && (lastAdapter.LowPart || lastAdapter.HighPart);
@@ -238,11 +239,11 @@ ReplacementTargets Monitor::PrepareReplacement(std::shared_ptr<const Modes> mode
             {assigned ? renderLimit : 0, std::move(modes), hasAdapter ? lastAdapter : preferred, adapters}};
 }
 
-NTSTATUS Monitor::SetTargets(std::shared_ptr<const Modes> next, const RenderChange* pending)
+NTSTATUS Monitor::SetTargets(TargetModes next, const RenderChange* pending)
 {
     RenderChange change;
     bool republish;
-    std::shared_ptr<const Modes> previous;
+    TargetModes previous;
     {
         std::lock_guard<std::mutex> guard(renderLock);
         if (pending && pending->revision != renderRevision) return STATUS_SUCCESS;
@@ -251,17 +252,17 @@ NTSTATUS Monitor::SetTargets(std::shared_ptr<const Modes> next, const RenderChan
         previous = targets;
     }
     try {
+        if (!next.Fits(change.limit)) return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
         const auto available = Available(next, change.limit);
-        if (available->empty()) return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
-        if (republish || !SameModes(*previous, *available)) {
+        if (republish || !SameModes(*previous.modes, *available.modes)) {
             SetQueryTargets(available); // IddCx may query synchronously during the update.
             NTSTATUS status;
 #if IDDCX_VERSION_MINOR >= 10
             if (AdvancedColorAvailable())
-                status = SendTargets<IDDCX_TARGET_MODE2, IDARG_IN_UPDATEMODES2>(*this, *available, IddCxMonitorUpdateModes2);
+                status = SendTargets<IDDCX_TARGET_MODE2, IDARG_IN_UPDATEMODES2>(*this, *available.modes, IddCxMonitorUpdateModes2);
             else
 #endif
-                status = SendTargets<IDDCX_TARGET_MODE, IDARG_IN_UPDATEMODES>(*this, *available, IddCxMonitorUpdateModes);
+                status = SendTargets<IDDCX_TARGET_MODE, IDARG_IN_UPDATEMODES>(*this, *available.modes, IddCxMonitorUpdateModes);
             if (!NT_SUCCESS(status)) {
                 SetQueryTargets(previous);
                 return status;
@@ -274,11 +275,11 @@ NTSTATUS Monitor::SetTargets(std::shared_ptr<const Modes> next, const RenderChan
     }
 }
 
-NTSTATUS Monitor::CommitTargets(std::shared_ptr<const Modes> next, RenderChange change)
+NTSTATUS Monitor::CommitTargets(TargetModes next, RenderChange change)
 {
     std::lock_guard<std::mutex> guard(renderLock);
     const UINT currentLimit = renderLimit ? renderLimit : publishedLimit;
-    if (currentLimit != change.limit && !HasRenderTarget(*next, currentLimit)) {
+    if (!next.Fits(currentLimit)) {
         // Queries must see the last accepted request while the work item corrects the IddCx list.
         targets = requested;
         republishTargets = true;
