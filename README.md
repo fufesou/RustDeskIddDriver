@@ -1,37 +1,31 @@
-The sample based on [Indirect Display Driver Sample](https://github.com/microsoft/Windows-driver-samples/tree/master/video/IndirectDisplay).
+# RustDesk indirect display driver
 
-# [RustDeskIddDriver](./RustDeskIddDriver)
+RustDeskIddDriver creates up to ten virtual monitors on Windows. Each connector can have its own persistent identity, preferred mode, rational refresh rates, EDID, HDR setting and hardware cursor setting. The controller can also suggest a render GPU for the adapter. The original plug, unplug and mode-update requests remain available to existing clients. [Controller commands](RustDeskIddApp/README.md) · [Control interface](RustDeskIddDriver/Public.h)
 
-This project gives the following abilities:
+## Build and test
 
-1. Plugin and plugout monitors.
-2. Update monitor modes.
+Build the solution with Visual Studio, the C++ desktop tools, and a matching Windows SDK and WDK. The x64 and ARM64 driver configurations target IddCx 1.10 with a 1.4 runtime minimum. WDK 10.0.26100 includes the 1.10 headers and libraries. To build with an older WDK that contains IddCx 1.4, add `/p:IDDCX_VERSION_MINOR=4` to the driver build. HDR requires a 1.10 build and runtime. An HDR profile on an older runtime returns an unsupported-feature error.
 
-See [`IOCTL_CHANGER_IDD_PLUG_IN`](./RustDeskIddDriver/Public.h#L7) [`IOCTL_CHANGER_IDD_PLUG_OUT`](./RustDeskIddDriver/Public.h#L11) [`IOCTL_CHANGER_IDD_UPDATE_MONITOR_MODE`](./RustDeskIddDriver/Public.h#L15).
+From an x64 Visual Studio developer PowerShell with the SDK and WDK environment loaded, run the offline regression tests after building the Release app.
 
-See [RustDeskIddApp](./RustDeskIddApp) for examples.
+```powershell
+python tests/profile_cli.py RustDeskIddApp/x64/Release/RustDeskIddApp.exe -v
+./tests/run-driver-tests.ps1
+```
 
-# [RustDeskIddApp](./RustDeskIddApp/README.md)
+For manual testing, install the package and create a profile on a free connector using the [controller commands](RustDeskIddApp/README.md).
 
-The test application to create device, install idd, and plugin monitors.
+- Start a fresh menu session with connectors 0 and 1 free and press `a` twice. In a second terminal, apply a copy of `connector-0.profile` with `enabled=0`. Press `A` and enter `0` to reconnect it. Verify that connector 1 stays online and that pressing `b` twice disconnects 0 first, then 1.
+- On Windows 10 1903 or 22H2, apply an SDR profile and compare `modes PROFILE` with Windows Advanced display settings. Change the preferred refresh rate, test sleep and resume, then apply `enabled=0` and verify that the monitor disappears.
+- On a supported Windows 11 system, apply `hdr=1`, enable **Use HDR** on the virtual monitor and display HDR content there. Check `color --profile PROFILE` and capture a frame with `hdr-capture PROFILE NEW.png`.
+- With `cursor=1`, move the pointer over the virtual monitor and query `cursor --profile PROFILE`. Check that its position changes. In a capture client that supports hardware cursors, verify that exactly one pointer appears with both `cursor=1` and `cursor=0`.
 
-# TODOs
+Windows supplies the driver swap-chain surface on the assigned render adapter. Capture and encoding run in the streaming application. It must support HDR capture, color conversion and a 10-bit stream for HDR playback. It can read per-monitor color metadata and cursor updates through the [display profile interface](RustDeskIddDriver/DisplayProfile.h).
 
-1. Get the status code from driver when calling `DeviceIoControl`.
+Adapted from Microsoft's [Indirect Display Driver Sample](https://github.com/microsoft/Windows-driver-samples/tree/main/video/IndirectDisplay).
 
----
-topic: sample
-page_type: sample
-languages:
-- cpp
-products:
-- windows
-- windows-wdk
-name: 'IddSample'
-description: "Implements a sample IddCx 1.4 driver and a sample application that instantiates a software device using it."
-statusNotificationTargets:
-- dspkdev@microsoft.com
----
+<details>
+<summary>Original Microsoft sample notes</summary>
 
 # Indirect Display Driver Sample #
 
@@ -67,3 +61,5 @@ The INF file included in the sample needs updating for production use. One field
 Ensure the device information reported to `IddCxAdapterInitAsync` is accurate. This information determines how the device is reported to the OS and what static features (like support for gamma tables) the device will have available. If some information cannot be known immediately in the `EvtDeviceD0Entry` callback, IddCx allows the driver to call `IddCxAdapterInitAsync` at any point after D0 entry, before D0 exit.
 
 Careful attention should be paid to the frame processing loop. This will directly impact the performance of the user's system, so making use of the [Multimedia Class Scheduler Service](https://msdn.microsoft.com/en-us/library/windows/desktop/ms684247(v=vs.85).aspx) and DXGI's support for [GPU prioritization](https://msdn.microsoft.com/en-us/library/windows/desktop/bb174534(v=vs.85).aspx) should be considered. Any significant work should be performed outside the main processing loop, such as by queuing work in a thread pool. See `SwapChainProcessor::RunCore` for more information.
+
+</details>

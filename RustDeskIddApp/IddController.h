@@ -2,10 +2,25 @@
 #include <Windows.h>
 #include <tchar.h>
 #include <swdevice.h>
+#include <setupapi.h>
+#include "../RustDeskIddDriver/DisplayProfile.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+HANDLE DeviceOpenHandle(void);
+extern const GUID GUID_DEVINTERFACE_IDD_DRIVER_DEVICE;
+HDEVINFO OpenDisplayInterfaceSet(void);
+DWORD OpenDisplayInterface(HDEVINFO devices, SP_DEVICE_INTERFACE_DATA* entry, HANDLE* handle);
+VOID DeviceCloseHandle(HANDLE handle);
+int RunDisplayCommand(int argc, wchar_t** argv);
+typedef struct {
+    CtlMonitorIdentity Display;
+    GUID AttachmentId;
+} SessionMonitor;
+BOOL PlugInProfile(UINT connector, const CtlMonitorIdentity* previous, SessionMonitor* added);
+DWORD DisconnectProfile(const SessionMonitor* monitor);
 
 /**
  * @brief Install or Update RustDeskIddDriver.
@@ -123,6 +138,7 @@ typedef struct _MonitorMode {
     // Sync affects frequency.
     DWORD sync;
 } MonitorMode, *PMonitorMode;
+BOOL UpdateProfileModes(const SessionMonitor* monitor, UINT count, const MonitorMode* modes);
 
 /**
  * @brief Update monitor mode.

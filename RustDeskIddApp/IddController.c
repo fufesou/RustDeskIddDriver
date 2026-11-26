@@ -39,13 +39,6 @@ BOOLEAN GetDevicePath(
     _Out_writes_(BufLen) PTCHAR DevicePath,
     _In_ size_t BufLen
 );
-// https://github.com/microsoft/Windows-driver-samples/blob/9f03207ae1e8df83325f067de84494ae55ab5e97/usb/umdf_fx2/exe/testapp.c#L90
-// Works good to check whether device is created before.
-BOOLEAN GetDevicePath2(
-    _In_ LPCGUID InterfaceGuid,
-    _Out_writes_(BufLen) PTCHAR DevicePath,
-    _In_ size_t BufLen
-);
 
 HANDLE DeviceOpenHandle();
 VOID DeviceCloseHandle(HANDLE handle);
@@ -537,67 +530,38 @@ BOOL MonitorPlugOut(UINT index)
 
 BOOL MonitorModesUpdate(UINT index, UINT modeCount, PMonitorMode modes)
 {
-    SetLastMsg("Success");
-
-    HANDLE hDevice = DeviceOpenHandle();
-    if (hDevice == INVALID_HANDLE_VALUE || hDevice == NULL)
-    {
+    const DWORD bytes = CtlModeRequestBytes(modeCount);
+    if (!bytes || !modes) {
+        SetLastMsg("Invalid monitor mode list\n");
         return FALSE;
     }
-
-    BOOL ret = FALSE;
-    DWORD junk = 0;
-    size_t buflen = sizeof(UINT) * 2 + modeCount * sizeof(MonitorMode);
-    PCtlMonitorModes pMonitorModes = (PCtlMonitorModes)malloc(buflen);
-    if (pMonitorModes == NULL)
-    {
-        SetLastMsg("Failed MonitorModesUpdate CtlMonitorModes malloc\n");
-        if (g_printMsg)
-        {
-            printf(g_lastMsg);
-        }
+    const HANDLE device = DeviceOpenHandle();
+    if (device == INVALID_HANDLE_VALUE) return FALSE;
+    PCtlMonitorModes packet = malloc(bytes);
+    if (!packet) {
+        DeviceCloseHandle(device);
+        SetLastMsg("Cannot allocate monitor mode list\n");
         return FALSE;
     }
-
-    pMonitorModes->ConnectorIndex = index;
-    pMonitorModes->ModeCount = modeCount;
-    for (UINT i = 0; i < modeCount; ++i)
-    {
-        pMonitorModes->Modes[i].Width = modes[i].width;
-        pMonitorModes->Modes[i].Height = modes[i].height;
-        pMonitorModes->Modes[i].Sync = modes[i].sync;
+    packet->ConnectorIndex = index;
+    packet->ModeCount = modeCount;
+    for (UINT i = 0; i < modeCount; ++i) {
+        packet->Modes[i].Width = modes[i].width;
+        packet->Modes[i].Height = modes[i].height;
+        packet->Modes[i].Sync = modes[i].sync;
     }
-    if (!DeviceIoControl(
-        hDevice,
-        IOCTL_CHANGER_IDD_UPDATE_MONITOR_MODE,
-        pMonitorModes,               // Ptr to InBuffer
-        buflen,                     // Length of InBuffer
-        NULL,                       // Ptr to OutBuffer
-        0,                          // Length of OutBuffer
-        &junk,                      // BytesReturned
-        0))                         // Ptr to Overlapped structure
-    {
-        DWORD error = GetLastError();
-        LPSTR errorString = formatErrorString(error);
-        SetLastMsg("Failed MonitorModesUpdate DeviceIoControl, error: 0x%x, %s", error, errorString == NULL ? "(NULL)\n" : errorString);
-        if (errorString != NULL)
-        {
-            LocalFree(errorString);
-        }
-        if (g_printMsg)
-        {
-            printf(g_lastMsg);
-        }
-        ret = FALSE;
+    DWORD used = 0;
+    const BOOL ok = DeviceIoControl(device, IOCTL_CHANGER_IDD_UPDATE_MONITOR_MODE, packet, bytes,
+                                    NULL, 0, &used, NULL);
+    const DWORD error = ok ? ERROR_SUCCESS : GetLastError();
+    free(packet);
+    DeviceCloseHandle(device);
+    if (!ok) {
+        SetLastMsg("Updating monitor modes failed (Win32 %lu)\n", error);
+        if (g_printMsg) fputs(g_lastMsg, stdout);
+        SetLastError(error);
     }
-    else
-    {
-        ret = TRUE;
-    }
-
-    free(pMonitorModes);
-    DeviceCloseHandle(hDevice);
-    return ret;
+    return ok;
 }
 
 VOID WINAPI
@@ -755,227 +719,54 @@ clean0:
     return bRet;
 }
 
-BOOLEAN GetDevicePath2(
-    _In_ LPCGUID InterfaceGuid,
-    _Out_writes_(BufLen) PTCHAR DevicePath,
-    _In_ size_t BufLen
-)
+HDEVINFO OpenDisplayInterfaceSet(void)
 {
-    HANDLE                              hDevice = INVALID_HANDLE_VALUE;
-    PSP_DEVICE_INTERFACE_DETAIL_DATA    deviceInterfaceDetailData = NULL;
-    ULONG                               predictedLength = 0;
-    ULONG                               requiredLength = 0;
-    ULONG                               bytes;
-    HDEVINFO                            hardwareDeviceInfo;
-    SP_DEVICE_INTERFACE_DATA            deviceInterfaceData;
-    BOOLEAN                             status = FALSE;
-    HRESULT                             hr;
-
-    hardwareDeviceInfo = SetupDiGetClassDevs(
-        InterfaceGuid,
-        NULL, // Define no enumerator (global)
-        NULL, // Define no
-        (DIGCF_PRESENT | // Only Devices present
-            DIGCF_DEVICEINTERFACE)); // Function class devices.
-    if (INVALID_HANDLE_VALUE == hardwareDeviceInfo)
-    {
-        DWORD error = GetLastError();
-        LPSTR errorString = formatErrorString(error);
-        SetLastMsg("Failed GetDevicePath2 SetupDiGetClassDevs, error: 0x%x, %s", error, errorString == NULL ? "(NULL)\n" : errorString);
-        if (errorString != NULL)
-        {
-            LocalFree(errorString);
-        }
-        if (g_printMsg)
-        {
-            printf(g_lastMsg);
-        }
-        return FALSE;
-    }
-
-    deviceInterfaceData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
-
-    if (!SetupDiEnumDeviceInterfaces(hardwareDeviceInfo,
-        0, // No care about specific PDOs
-        InterfaceGuid,
-        0, //
-        &deviceInterfaceData))
-    {
-        DWORD error = GetLastError();
-        LPSTR errorString = formatErrorString(error);
-        SetLastMsg("Failed GetDevicePath2 SetupDiEnumDeviceInterfaces, error: 0x%x, %s", error, errorString == NULL ? "(NULL)\n" : errorString);
-        if (errorString != NULL)
-        {
-            LocalFree(errorString);
-        }
-        if (g_printMsg)
-        {
-            printf(g_lastMsg);
-        }
-        goto Clean0;
-    }
-
-    //
-    // Allocate a function class device data structure to receive the
-    // information about this particular device.
-    //
-    SetupDiGetDeviceInterfaceDetail(
-        hardwareDeviceInfo,
-        &deviceInterfaceData,
-        NULL, // probing so no output buffer yet
-        0, // probing so output buffer length of zero
-        &requiredLength,
-        NULL);//not interested in the specific dev-node
-
-    DWORD error = GetLastError();
-    if (ERROR_INSUFFICIENT_BUFFER != error)
-    {
-        LPSTR errorString = formatErrorString(error);
-        SetLastMsg("GetDevicePath2 SetupDiGetDeviceInterfaceDetail failed, error: 0x%x, %s", error, errorString == NULL ? "(NULL)\n" : errorString);
-        if (errorString != NULL)
-        {
-            LocalFree(errorString);
-        }
-        if (g_printMsg)
-        {
-            printf(g_lastMsg);
-        }
-        goto Clean0;
-    }
-
-    predictedLength = requiredLength;
-    deviceInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA)HeapAlloc(
-        GetProcessHeap(),
-        HEAP_ZERO_MEMORY,
-        predictedLength
-    );
-
-    if (deviceInterfaceDetailData)
-    {
-        deviceInterfaceDetailData->cbSize =
-            sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
-    }
-    else
-    {
-        DWORD error = GetLastError();
-        LPSTR errorString = formatErrorString(error);
-        SetLastMsg("Failed GetDevicePath2 HeapAlloc, error: 0x%x, %s", error, errorString == NULL ? "(NULL)\n" : errorString);
-        if (errorString != NULL)
-        {
-            LocalFree(errorString);
-        }
-        if (g_printMsg)
-        {
-            printf(g_lastMsg);
-        }
-        goto Clean0;
-    }
-
-    if (!SetupDiGetDeviceInterfaceDetail(
-        hardwareDeviceInfo,
-        &deviceInterfaceData,
-        deviceInterfaceDetailData,
-        predictedLength,
-        &requiredLength,
-        NULL))
-    {
-        DWORD error = GetLastError();
-        LPSTR errorString = formatErrorString(error);
-        SetLastMsg("Failed GetDevicePath2 SetupDiGetDeviceInterfaceDetail, error: 0x%x, %s", error, errorString == NULL ? "(NULL)\n" : errorString);
-        if (errorString != NULL)
-        {
-            LocalFree(errorString);
-        }
-        if (g_printMsg)
-        {
-            printf(g_lastMsg);
-        }
-        goto Clean1;
-    }
-
-    hr = StringCchCopy(DevicePath, BufLen, deviceInterfaceDetailData->DevicePath);
-    if (FAILED(hr))
-    {
-        LPSTR errorString = formatErrorString((DWORD)hr);
-        SetLastMsg("Failed GetDevicePath2 StringCchCopy, hresult 0x%lx, %s", hr, errorString == NULL ? "(NULL)\n" : errorString);
-        if (errorString != NULL)
-        {
-            LocalFree(errorString);
-        }
-        if (g_printMsg)
-        {
-            printf(g_lastMsg);
-        }
-        status = FALSE;
-        goto Clean1;
-    }
-    else
-    {
-        status = TRUE;
-    }
-
-Clean1:
-    (VOID)HeapFree(GetProcessHeap(), 0, deviceInterfaceDetailData);
-Clean0:
-    (VOID)SetupDiDestroyDeviceInfoList(hardwareDeviceInfo);
-    return status;
+    return SetupDiGetClassDevs(&GUID_DEVINTERFACE_IDD_DRIVER_DEVICE, NULL, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
 }
 
-// https://stackoverflow.com/questions/67164846/createfile-fails-unless-i-disable-enable-my-device
-HANDLE DeviceOpenHandle()
+DWORD OpenDisplayInterface(HDEVINFO devices, SP_DEVICE_INTERFACE_DATA* entry, HANDLE* handle)
 {
-    SetLastMsg("Success");
+    DWORD size = 0;
+    if (!SetupDiGetDeviceInterfaceDetail(devices, entry, NULL, 0, &size, NULL)) {
+        const DWORD error = GetLastError();
+        if (error != ERROR_INSUFFICIENT_BUFFER) return error;
+    }
+    PSP_DEVICE_INTERFACE_DETAIL_DATA detail = malloc(size);
+    if (!detail) return ERROR_OUTOFMEMORY;
+    detail->cbSize = sizeof(*detail);
+    DWORD error = ERROR_SUCCESS;
+    if (SetupDiGetDeviceInterfaceDetail(devices, entry, detail, size, NULL, NULL)) {
+        *handle = CreateFile(detail->DevicePath, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                             NULL, OPEN_EXISTING, 0, NULL);
+        if (*handle == INVALID_HANDLE_VALUE) error = GetLastError();
+    } else {
+        error = GetLastError();
+    }
+    free(detail);
+    return error;
+}
 
-    // const int maxDevPathLen = 256;
-    TCHAR devicePath[256] = { 0 };
-    HANDLE hDevice = INVALID_HANDLE_VALUE;
-    do
-    {
-        if (FALSE == GetDevicePath2(
-            &GUID_DEVINTERFACE_IDD_DRIVER_DEVICE,
-            devicePath,
-            sizeof(devicePath) / sizeof(devicePath[0])))
-        {
-            break;
-        }
-        if (_tcslen(devicePath) == 0)
-        {
-            SetLastMsg("DeviceOpenHandle GetDevicePath got empty device path\n");
-            if (g_printMsg)
-            {
-                printf(g_lastMsg);
-            }
-            break;
-        }
-
-        _tprintf(_T("Idd device: try open %s\n"), devicePath);
-        hDevice = CreateFile(
-            devicePath,
-            GENERIC_READ | GENERIC_WRITE,
-            // FILE_SHARE_READ | FILE_SHARE_WRITE,
-            0,
-            NULL, // no SECURITY_ATTRIBUTES structure
-            OPEN_EXISTING, // No special create flags
-            0, // No special attributes
-            NULL
-        );
-        if (hDevice == INVALID_HANDLE_VALUE || hDevice == NULL)
-        {
-            DWORD error = GetLastError();
-            LPSTR errorString = formatErrorString(error);
-            SetLastMsg("Failed DeviceOpenHandle CreateFile, error: 0x%x, %s", error, errorString == NULL ? "(NULL)\n" : errorString);
-            if (errorString != NULL)
-            {
-                LocalFree(errorString);
-            }
-            if (g_printMsg)
-            {
-                printf(g_lastMsg);
-            }
-        }
-    } while (0);
-
-    return hDevice;
+HANDLE DeviceOpenHandle(void)
+{
+    HANDLE handle = INVALID_HANDLE_VALUE;
+    HDEVINFO devices = OpenDisplayInterfaceSet();
+    DWORD error;
+    if (devices == INVALID_HANDLE_VALUE) {
+        error = GetLastError();
+    } else {
+        SP_DEVICE_INTERFACE_DATA entry = {sizeof(entry)};
+        error = SetupDiEnumDeviceInterfaces(devices, NULL, &GUID_DEVINTERFACE_IDD_DRIVER_DEVICE, 0, &entry) ?
+            OpenDisplayInterface(devices, &entry, &handle) : GetLastError();
+        SetupDiDestroyDeviceInfoList(devices);
+    }
+    if (error) {
+        SetLastMsg("Opening display interface failed (Win32 %lu)\n", error);
+        if (g_printMsg) fputs(g_lastMsg, stdout);
+        SetLastError(error);
+    } else {
+        SetLastMsg("Success");
+    }
+    return handle;
 }
 
 VOID DeviceCloseHandle(HANDLE handle)
